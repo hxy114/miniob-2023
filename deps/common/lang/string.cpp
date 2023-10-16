@@ -284,4 +284,43 @@ std::string double_to_str(double v)
 
   return std::string(buf, len);
 }
+bool is_valid_date(const void *date){
+  const char *s1 = (const char *)date;
+  int year1=0,month1=0,day1=0;
+  int i;
+  for( i=0;i<10&&s1[i]!='-';i++){
+    year1=year1*10+(s1[i]-'0');
+
+  }
+  ASSERT(s1[i++]=='-',"解析date错误");
+
+  for(;i<10&&s1[i]!='-';i++){
+    month1=month1*10+(s1[i]-'0');
+  }
+  ASSERT(s1[i++]=='-',"解析date错误");
+  for(;i<10&&s1[i]!='\0';i++){
+    day1=day1*10+(s1[i]-'0');
+  }
+  if(month1<1||month1>12){
+    return false;
+  }
+  if(day1<1||day1>31){
+    return false;
+  }
+  if((month1==4||month1==6||month1==9||month1==11)&&day1>30){
+    return false;
+  }
+  if(month1==2){
+    if((year1%4==0&&year1%100!=0)||year1%400==0){
+      if(day1>29)
+        return false;
+    }else{
+      if(day1>28){
+        return false;
+      }
+    }
+  }
+  return true;
+
+}
 }  // namespace common

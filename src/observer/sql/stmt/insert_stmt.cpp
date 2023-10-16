@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/stmt/insert_stmt.h"
 #include "common/log/log.h"
+#include "common/lang/string.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 
@@ -57,6 +58,11 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
       LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
           table_name, field_meta->name(), field_type, value_type);
       return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    }
+    if(value_type==DATES&&!common::is_valid_date(values[i].data())){
+      LOG_WARN("date error. table=%s, field=%s, field type=%d, value_type=%d",
+          table_name, field_meta->name(), field_type, value_type);
+      return RC::INVALID_ARGUMENT;
     }
   }
 

@@ -19,11 +19,11 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/comparator.h"
 #include "common/lang/string.h"
 
-const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "ints", "floats", "booleans"};
+const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "ints", "floats", "dates","booleans"};
 
 const char *attr_type_to_string(AttrType type)
 {
-  if (type >= UNDEFINED && type <= FLOATS) {
+  if (type >= UNDEFINED && type <= DATES) {
     return ATTR_TYPE_NAME[type];
   }
   return "unknown";
@@ -53,9 +53,14 @@ Value::Value(bool val)
   set_boolean(val);
 }
 
-Value::Value(const char *s, int len /*= 0*/)
+Value::Value(const char *s, AttrType attrType,int len /*= 0*/)
 {
-  set_string(s, len);
+  if(attrType==CHARS){
+    set_string(s, len);
+  }else{
+    set_date(s,len);
+  }
+
 }
 
 void Value::set_data(char *data, int length)
@@ -63,6 +68,9 @@ void Value::set_data(char *data, int length)
   switch (attr_type_) {
     case CHARS: {
       set_string(data, length);
+    } break;
+    case DATES: {
+      set_date(data, length);
     } break;
     case INTS: {
       num_value_.int_value_ = *(int *)data;
@@ -111,6 +119,17 @@ void Value::set_string(const char *s, int len /*= 0*/)
   }
   length_ = str_value_.length();
 }
+void Value::set_date(const char *s, int len /*= 0*/)
+{
+  attr_type_ = DATES;
+  if (len > 0) {
+    len = strnlen(s, len);
+    str_value_.assign(s, len);
+  } else {
+    str_value_.assign(s);
+  }
+  length_ = str_value_.length();
+}
 
 void Value::set_value(const Value &value)
 {
@@ -124,6 +143,9 @@ void Value::set_value(const Value &value)
     case CHARS: {
       set_string(value.get_string().c_str());
     } break;
+    case DATES: {
+      set_date(value.get_string().c_str());
+    } break;
     case BOOLEANS: {
       set_boolean(value.get_boolean());
     } break;
@@ -136,7 +158,7 @@ void Value::set_value(const Value &value)
 const char *Value::data() const
 {
   switch (attr_type_) {
-    case CHARS: {
+    case CHARS:case DATES :{
       return str_value_.c_str();
     } break;
     default: {
@@ -161,6 +183,45 @@ std::string Value::to_string() const
     case CHARS: {
       os << str_value_;
     } break;
+    case DATES: {
+      int i = 0;
+      const char *data_=str_value_.c_str();
+      for (i = 0; i < length_ && data_[i] != '-'; i++) {
+        if (data_[i] == '\0') {
+          break;
+        }
+        os << data_[i];
+      }
+      if (data_[i] == '-') {
+        os << data_[i];
+        i++;
+      }
+      if (data_[i + 1] != '-') {
+        os << data_[i];
+        os << data_[i + 1];
+        i++;
+        i++;
+      } else if (data_[i + 1] == '-') {
+        os << '0';
+        os << data_[i];
+        i++;
+      }
+
+      if (data_[i] == '-') {
+        os << data_[i];
+        i++;
+      }
+
+      if (data_[i + 1] != '\0') {
+        os << data_[i];
+        os << data_[i + 1];
+
+      } else if (data_[i + 1] == '\0') {
+        os << '0';
+        os << data_[i];
+      }
+    }
+      break;
     default: {
       LOG_WARN("unsupported attr type: %d", attr_type_);
     } break;
@@ -183,6 +244,12 @@ int Value::compare(const Value &other) const
             this->str_value_.length(),
             (void *)other.str_value_.c_str(),
             other.str_value_.length());
+      } break;
+      case DATES: {
+        return common::compare_date((void *)this->str_value_.c_str(),
+
+            (void *)other.str_value_.c_str()
+            );
       } break;
       case BOOLEANS: {
         return common::compare_int((void *)&this->num_value_.bool_value_, (void *)&other.num_value_.bool_value_);

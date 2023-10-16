@@ -77,6 +77,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         INT_T
         STRING_T
         FLOAT_T
+        DATE_T
         HELP
         EXIT
         DOT //QUOTE
@@ -122,6 +123,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %token <floats> FLOAT
 %token <string> ID
 %token <string> SSS
+%token <string> DATE
 //非终结符
 
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
@@ -326,11 +328,20 @@ attr_def:
     }
     | ID type
     {
-      $$ = new AttrInfoSqlNode;
-      $$->type = (AttrType)$2;
-      $$->name = $1;
-      $$->length = 4;
-      free($1);
+    if ((AttrType)$2==DATES){
+    $$ = new AttrInfoSqlNode;
+              $$->type = (AttrType)$2;
+              $$->name = $1;
+              $$->length = 10;
+              free($1);
+    }else{
+    $$ = new AttrInfoSqlNode;
+          $$->type = (AttrType)$2;
+          $$->name = $1;
+          $$->length = 4;
+          free($1);
+    }
+
     }
     ;
 number:
@@ -340,6 +351,7 @@ type:
     INT_T      { $$=INTS; }
     | STRING_T { $$=CHARS; }
     | FLOAT_T  { $$=FLOATS; }
+    | DATE_T  {$$=DATES;}
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
     INSERT INTO ID VALUES LBRACE value value_list RBRACE 
@@ -382,9 +394,14 @@ value:
     }
     |SSS {
       char *tmp = common::substr($1,1,strlen($1)-2);
-      $$ = new Value(tmp);
+      $$ = new Value(tmp,CHARS);
       free(tmp);
     }
+    |DATE {
+           char *tmp = common::substr($1,1,strlen($1)-2);
+           $$ = new Value(tmp,DATES);
+           free(tmp);
+         }
     ;
     
 delete_stmt:    /*  delete 语句的语法解析树*/
