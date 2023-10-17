@@ -100,6 +100,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         NE
         NOT
         LK
+        INNER
+        JOIN
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -115,6 +117,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   std::vector<Value> *              value_list;
   std::vector<ConditionSqlNode> *   condition_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
+  InnerJoinSqlNode *                inner_join_list;
   std::vector<std::string> *        relation_list;
   char *                            string;
   int                               number;
@@ -140,9 +143,10 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <attr_info>           attr_def
 %type <value_list>          value_list
 %type <condition_list>      where
+%type <condition_list>      on
 %type <condition_list>      condition_list
 %type <rel_attr_list>       select_attr
-%type <relation_list>       rel_list
+%type <inner_join_list>     rel_list
 %type <rel_attr_list>       attr_list
 %type <expression>          expression
 %type <expression_list>     expression_list
@@ -440,26 +444,28 @@ update_stmt:      /*  update 语句的语法解析树*/
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list where
-    {
-      $$ = new ParsedSqlNode(SCF_SELECT);
-      if ($2 != nullptr) {
-        $$->selection.attributes.swap(*$2);
-        delete $2;
-      }
-      if ($5 != nullptr) {
-        $$->selection.relations.swap(*$5);
-        delete $5;
-      }
-      $$->selection.relations.push_back($4);
-      std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
+    SELECT select_attr FROM ID rel_list  where
+         {
+           $$ = new ParsedSqlNode(SCF_SELECT);
+           if ($2 != nullptr) {
+             $$->selection.attributes.swap(*$2);
+             delete $2;
+           }
+           if ($5 != nullptr) {
+             $$->selection.relations.swap($5->relations);
+             $$->selection.conditions.swap($5->conditions);
+             delete $5;
+           }
+           $$->selection.relations.push_back($4);
+           std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
 
-      if ($6 != nullptr) {
-        $$->selection.conditions.swap(*$6);
-        delete $6;
-      }
-      free($4);
-    }
+           if ($6 != nullptr) {
+             $$->selection.conditions.insert($$->selection.conditions.begin(),$6->begin(),$6->end());
+             delete $6;
+           }
+           free($4);
+         }
+
     ;
 calc_stmt:
     CALC expression_list
@@ -574,13 +580,29 @@ rel_list:
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<std::string>;
+        $$ = new InnerJoinSqlNode;
       }
 
-      $$->push_back($2);
+      $$->relations.push_back($2);
       free($2);
     }
+    |INNER JOIN ID on rel_list {
+           if ($5 != nullptr) {
+             $$ = $5;
+           } else {
+             $$ = new InnerJoinSqlNode;
+           }
+
+           $$->relations.push_back($3);
+           if($4!=nullptr){
+           $$->conditions.insert($$->conditions.end(),$4->begin(),$4->end());
+           }
+
+           free($3);
+         }
     ;
+
+
 where:
     /* empty */
     {
@@ -590,6 +612,15 @@ where:
       $$ = $2;  
     }
     ;
+on:
+     /* empty */
+     {
+        $$ = nullptr;
+     }
+     | ON condition_list {
+        $$ = $2;
+     }
+     ;
 condition_list:
     /* empty */
     {
