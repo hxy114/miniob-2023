@@ -24,6 +24,7 @@ See the Mulan PSL v2 for more details. */
 #include <iostream>
 #include <memory>
 #include <string>
+#include <cmath>
 
 #include "common/log/log.h"
 namespace common {
@@ -283,6 +284,44 @@ std::string double_to_str(double v)
   }
 
   return std::string(buf, len);
+}
+std::string float2string(float v){
+  std::stringstream ss;
+  // ss << std::fixed << std::setprecision(6) << v; // 设置输出精度
+  ss << v;
+  return ss.str();
+}
+int float2int(float v){
+  return  static_cast<int>(std::round(v));
+}
+float int2float(int v){
+  return static_cast<float >(v);
+}
+float string2float(std::string str){
+  size_t pos = 0;
+  while (pos < str.length() && (isdigit(str[pos]) || str[pos] == '.')) {
+    pos++;
+  }
+
+  if (pos == 0) {
+    return 0;  // 如果没有数字前缀，返回0
+  }
+
+  try {
+    return std::stof(str.substr(0, pos));
+  } catch (const std::invalid_argument& e) {
+    // 处理转换失败的情况
+    std::cerr << "Error: " << e.what() << std::endl;
+    return 0.0;
+  }
+
+}
+std::string int2string(int v){
+
+  std::stringstream ss;
+  ss << v;
+  return ss.str();
+
 }
 bool is_valid_date(const void *date){
   const char *s1 = (const char *)date;

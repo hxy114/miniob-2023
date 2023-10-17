@@ -264,6 +264,24 @@ int Value::compare(const Value &other) const
   } else if (this->attr_type_ == FLOATS && other.attr_type_ == INTS) {
     float other_data = other.num_value_.int_value_;
     return common::compare_float((void *)&this->num_value_.float_value_, (void *)&other_data);
+  }else if(this->attr_type_==INTS&&other.attr_type_==CHARS){
+    float f=common::string2float(other.get_string());
+    float my_f=this->num_value_.int_value_;
+    return common::compare_float(&my_f, &f);
+
+  }else if(this->attr_type_==CHARS&&other.attr_type_==INTS){
+    float f=common::string2float(this->str_value_);
+    float other_f=other.num_value_.int_value_;
+    return common::compare_float(&f, &other_f);
+
+  }else if(this->attr_type_==FLOATS&&other.attr_type_==CHARS){
+    float f=common::string2float(other.str_value_);
+    return common::compare_float((void *)&this->num_value_.float_value_,&f);
+
+  }else if(this->attr_type_==CHARS&&other.attr_type_==FLOATS){
+    float f=common::string2float(this->str_value_);
+    return common::compare_float(&f,(void *)&other.num_value_.float_value_);
+
   }
   LOG_WARN("not supported");
   return -1;  // TODO return rc?

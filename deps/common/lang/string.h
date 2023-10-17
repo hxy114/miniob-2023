@@ -118,6 +118,11 @@ void val_to_str(const T &val, std::string &str, std::ios_base &(*radix)(std::ios
  */
 std::string double_to_str(double v);
 bool is_valid_date(const void *date);
+std::string float2string(float v);
+std::string int2string(int v);
+float string2float(std::string v);
+float int2float(int v);
+int float2int(float v);
 bool is_blank(const char *s);
 
 /**
