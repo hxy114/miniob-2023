@@ -98,6 +98,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         LE
         GE
         NE
+        NOT
+        LK
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -124,6 +126,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %token <string> ID
 %token <string> SSS
 %token <string> DATE
+%token <string> PATTERN
 //非终结符
 
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
@@ -402,6 +405,11 @@ value:
            $$ = new Value(tmp,DATES);
            free(tmp);
          }
+    |PATTERN {
+         char *tmp = common::substr($1,1,strlen($1)-2);
+         $$ = new Value(tmp,CHARS);
+         free(tmp);
+         }
     ;
     
 delete_stmt:    /*  delete 语句的语法解析树*/
@@ -656,6 +664,8 @@ comp_op:
     | LE { $$ = LESS_EQUAL; }
     | GE { $$ = GREAT_EQUAL; }
     | NE { $$ = NOT_EQUAL; }
+    | LK {$$ = LIKE;}
+    | NOT LK {$$ = NOT_LIKE;}
     ;
 
 load_data_stmt:
