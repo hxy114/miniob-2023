@@ -434,7 +434,15 @@ RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_
   LOG_INFO("Successfully added a new index (%s) on the table (%s)", index_name, name());
   return rc;
 }
-
+void Table::get_index_name(std::vector<std::string> &index_names){
+  std::string table_name = table_meta_.name();
+  const int index_num = table_meta_.index_num();
+  for (int i = 0; i < index_num; i++) {
+    const IndexMeta *index_meta = table_meta_.index(i);
+    std::string str(index_meta->name());
+    index_names.push_back(str);
+  }
+}
 RC Table::delete_record(const Record &record)
 {
   RC rc = RC::SUCCESS;
