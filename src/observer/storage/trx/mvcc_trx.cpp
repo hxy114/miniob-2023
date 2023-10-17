@@ -160,6 +160,11 @@ RC MvccTrx::insert_record(Table *table, Record &record)
   return rc;
 }
 
+RC MvccTrx::update_record(Table *table, Record &record, const FieldMeta *field_meta, Value value)
+{
+  return RC::UNIMPLENMENT;
+}
+
 RC MvccTrx::delete_record(Table * table, Record &record)
 {
   Field begin_field;

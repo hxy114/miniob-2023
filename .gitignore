@@ -4,8 +4,8 @@
 ./deps/jsoncpp
 ./deps/benchmark
 .vscode
-!.vscode/tasks.json
-!.vscode/launch.json
+.vscode/tasks.json
+.vscode/launch.json
 ./docs/doxy/
 build/*
 build_*
@@ -25,5 +25,4 @@ GRTAGS
 GPATH
 GTAGS
 docs/book
-.vscode/*
 #*#
