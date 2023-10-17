@@ -17,12 +17,12 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
-
+#include "common/lang/string.h"
 UpdateStmt::UpdateStmt(Table *table, Value value, int value_amount, FilterStmt *filter_stmt, const FieldMeta *field_meta)
     : table_ (table), value_(value), value_amount_(value_amount), filter_stmt_(filter_stmt), field_meta_(field_meta)
 {}
 
-RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
+RC UpdateStmt::create(Db *db,  UpdateSqlNode &update, Stmt *&stmt)
 {
   const char *table_name = update.relation_name.c_str();
   const char *attribute_name = update.attribute_name.c_str();
@@ -53,9 +53,56 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     const AttrType field_type = field_meta->type();
     const AttrType value_type = value.attr_type();
     if (field_type != value_type) {
-      LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d", 
-               table_name, field_meta->name(), field_type, value_type);
-      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      if(field_type==CHARS){
+        if(value_type==INTS){
+          auto s= common::int2string(value.get_int());
+          value.set_type(CHARS);
+          value.set_string(s.c_str());
+        }else if(value_type==FLOATS){
+          auto s= common::float2string(value.get_float());
+          value.set_type(CHARS);
+          value.set_string(s.c_str());
+        }else{
+          LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+          return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+
+        }
+      }else if(field_type==INTS){
+        if(value_type==CHARS){
+          auto d= common::string2float(value.get_string());
+          auto integer= common::float2int(d);
+          value.set_type(INTS);
+          value.set_int(integer);
+        }else if(value_type==FLOATS){
+          auto integer= common::float2int(value.get_float());
+          value.set_type(INTS);
+          value.set_int(integer);
+
+        }else{
+          LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+          return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        }
+      }else if(field_type==FLOATS){
+        if(value_type==INTS){
+          auto d= common::int2float(value.get_int());
+          value.set_type(FLOATS);
+          value.set_float(d);
+        }else if(value_type==CHARS){
+          auto d= common::string2float(value.get_string());
+          value.set_type(FLOATS);
+          value.set_float(d);
+        }else{
+          LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+          return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        }
+      }else{
+        LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+            table_name, field_meta->name(), field_type, value_type);
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      }
     }
     // if (field_meta->type() == DATES) {
     //   int time_distance = *(int *)value.data;

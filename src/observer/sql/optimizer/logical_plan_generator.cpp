@@ -23,7 +23,6 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/update_logical_operator.h"
 #include "sql/operator/delete_logical_operator.h"
 #include "sql/operator/join_logical_operator.h"
-#include "sql/operator/project_logical_operator.h"
 #include "sql/operator/explain_logical_operator.h"
 
 #include "sql/stmt/stmt.h"
