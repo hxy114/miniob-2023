@@ -85,7 +85,7 @@ public:
 
   // TODO refactor
   RC create_index(Trx *trx, const FieldMeta *field_meta, const char *index_name);
-
+  void get_index_name(std::vector<std::string>&index_names);
   RC get_record_scanner(RecordFileScanner &scanner, Trx *trx, bool readonly);
 
   RecordFileHandler *record_handler() const

@@ -59,5 +59,48 @@ int compare_string(void *arg1, int arg1_max_length, void *arg2, int arg2_max_len
   }
   return 0;
 }
+int compare_date(void *arg1,void *arg2){
+  const char *s1 = (const char *)arg1;
+  const char *s2 = (const char *)arg2;
+  int year1=0,month1=0,day1=0,year2=0,month2=0,day2=0;
+  int i,j;
+  for( i=0;i<10&&s1[i]!='-';i++){
+    year1=year1*10+(s1[i]-'0');
 
+  }
+  i++;
+
+  for(;i<10&&s1[i]!='-';i++){
+    month1=month1*10+(s1[i]-'0');
+  }
+  i++;
+  for(;i<10&&s1[i]!='\0';i++){
+    day1=day1*10+(s1[i]-'0');
+  }
+
+
+  for( j=0;j<10&&s2[j]!='-';j++){
+    year2=year2*10+(s2[j]-'0');
+  }
+  j++;
+
+  for(;j<10&&s2[j]!='-';j++){
+    month2=month2*10+(s2[j]-'0');
+  }
+  j++;
+  for(;j<10&&s2[j]!='\0';j++){
+    day2=day2*10+(s2[j]-'0');
+  }
+  if(year1-year2){
+    return year1-year2;
+  }
+  if(month1-month2){
+    return month1-month2;
+  }
+  if(day1-day2){
+    return day1-day2;
+  }
+  return 0;
+
+}
 } // namespace common

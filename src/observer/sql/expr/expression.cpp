@@ -14,7 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/expr/expression.h"
 #include "sql/expr/tuple.h"
-
+#include <regex>
 using namespace std;
 
 RC FieldExpr::get_value(const Tuple &tuple, Value &value) const
@@ -85,36 +85,56 @@ ComparisonExpr::ComparisonExpr(CompOp comp, unique_ptr<Expression> left, unique_
 
 ComparisonExpr::~ComparisonExpr()
 {}
-
+std::string wildcardToRegex(const std::string& wildcard) {
+  std::string regexPattern = std::regex_replace(wildcard, std::regex("%"), ".*");
+  regexPattern = std::regex_replace(regexPattern, std::regex("_"), ".");
+  return regexPattern;
+}
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
   RC rc = RC::SUCCESS;
-  int cmp_result = left.compare(right);
-  result = false;
-  switch (comp_) {
-    case EQUAL_TO: {
-      result = (0 == cmp_result);
-    } break;
-    case LESS_EQUAL: {
-      result = (cmp_result <= 0);
-    } break;
-    case NOT_EQUAL: {
-      result = (cmp_result != 0);
-    } break;
-    case LESS_THAN: {
-      result = (cmp_result < 0);
-    } break;
-    case GREAT_EQUAL: {
-      result = (cmp_result >= 0);
-    } break;
-    case GREAT_THAN: {
-      result = (cmp_result > 0);
-    } break;
-    default: {
-      LOG_WARN("unsupported comparison. %d", comp_);
-      rc = RC::INTERNAL;
-    } break;
+  if(comp_==LIKE||comp_==NOT_LIKE){
+    std::string regexPattern = wildcardToRegex(right.data());
+    std::regex reg(regexPattern);
+    if (std::regex_match(left.data(), reg)&&comp_!=LIKE) {
+      result=false;
+    }else if(std::regex_match(left.data(), reg)&&comp_==LIKE){
+      result=true;
+    }else if(!std::regex_match(left.data(), reg)&&comp_==LIKE){
+      result=false;
+    }else if(!std::regex_match(left.data(), reg)&&comp_!=LIKE){
+      result=true;
+    }
   }
+  else{
+    int cmp_result = left.compare(right);
+    result = false;
+    switch (comp_) {
+      case EQUAL_TO: {
+        result = (0 == cmp_result);
+      } break;
+      case LESS_EQUAL: {
+        result = (cmp_result <= 0);
+      } break;
+      case NOT_EQUAL: {
+        result = (cmp_result != 0);
+      } break;
+      case LESS_THAN: {
+        result = (cmp_result < 0);
+      } break;
+      case GREAT_EQUAL: {
+        result = (cmp_result >= 0);
+      } break;
+      case GREAT_THAN: {
+        result = (cmp_result > 0);
+      } break;
+      default: {
+        LOG_WARN("unsupported comparison. %d", comp_);
+        rc = RC::INTERNAL;
+      } break;
+    }
+  }
+
 
   return rc;
 }

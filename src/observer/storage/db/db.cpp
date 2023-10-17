@@ -100,7 +100,23 @@ RC Db::create_table(const char *table_name, int attribute_count, const AttrInfoS
   LOG_INFO("Create table success. table name=%s, table_id:%d", table_name, table_id);
   return RC::SUCCESS;
 }
+RC Db::drop_table(Table * table){
 
+  std::vector<std::string>index_names;
+  table->get_index_name(index_names);
+  const char *table_name=table->name();
+  delete table;
+  opened_tables_.erase(table_name);
+  std::string table_meta_file_path = table_meta_file(path_.c_str(), table_name);
+  std::string table_data_file_path = table_data_file(path_.c_str(),table_name);
+  remove(table_meta_file_path.c_str());
+  remove(table_data_file_path.c_str());
+  for(auto index_name:index_names){
+    auto path=table_index_file(path_.c_str(),table_name,index_name.c_str());
+    remove(path.c_str());
+  }
+  return RC::SUCCESS;
+}
 Table *Db::find_table(const char *table_name) const
 {
   std::unordered_map<std::string, Table *>::const_iterator iter = opened_tables_.find(table_name);
