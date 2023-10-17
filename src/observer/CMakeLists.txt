@@ -8,7 +8,9 @@ MESSAGE("MAIN SRC: " ${MAIN_SRC})
 FOREACH (F ${ALL_SRC})
 
     IF (NOT ${F} STREQUAL ${MAIN_SRC})
-        SET(LIB_SRC ${LIB_SRC} ${F})
+        SET(LIB_SRC ${LIB_SRC} ${F}
+                sql/operator/agg_logical_operator.cpp
+                sql/operator/agg_physical_operator.cpp)
     ENDIF()
 
     MESSAGE("Use " ${F})

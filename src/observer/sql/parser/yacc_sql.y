@@ -100,6 +100,11 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         NE
         NOT
         LK
+        MAX_agg
+        MIN_agg
+        AVG_agg
+        COUNT_agg
+        SUM_agg
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -119,6 +124,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   char *                            string;
   int                               number;
   float                             floats;
+  enum Agg                          agg;
 }
 
 %token <number> NUMBER
@@ -135,6 +141,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <value>               value
 %type <number>              number
 %type <comp>                comp_op
+%type <agg>                 agg
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
@@ -520,7 +527,16 @@ select_attr:
       RelAttrSqlNode attr;
       attr.relation_name  = "";
       attr.attribute_name = "*";
+      attr.agg=NO_AGG;
       $$->emplace_back(attr);
+    }
+    | agg LBRACE '*' RBRACE{
+    $$ = new std::vector<RelAttrSqlNode>;
+          RelAttrSqlNode attr;
+          attr.relation_name  = "";
+          attr.attribute_name = "*";
+          attr.agg=$1;
+          $$->emplace_back(attr);
     }
     | rel_attr attr_list {
       if ($2 != nullptr) {
@@ -537,15 +553,30 @@ rel_attr:
     ID {
       $$ = new RelAttrSqlNode;
       $$->attribute_name = $1;
+      $$->agg=NO_AGG;
       free($1);
+    }
+    |agg LBRACE ID RBRACE{
+    $$ = new RelAttrSqlNode;
+          $$->attribute_name = $3;
+          $$->agg=$1;
+          free($3);
     }
     | ID DOT ID {
       $$ = new RelAttrSqlNode;
       $$->relation_name  = $1;
       $$->attribute_name = $3;
+      $$->agg=NO_AGG;
       free($1);
       free($3);
-    }
+    }| agg LBRACE ID DOT ID RBRACE{
+           $$ = new RelAttrSqlNode;
+           $$->relation_name  = $3;
+           $$->attribute_name = $5;
+           $$->agg=$1;
+           free($3);
+           free($5);
+         }
     ;
 
 attr_list:
@@ -667,7 +698,12 @@ comp_op:
     | LK {$$ = LIKE;}
     | NOT LK {$$ = NOT_LIKE;}
     ;
-
+agg:
+    MAX_agg{$$=MAX_AGG;}
+    |MIN_agg{$$=MIN_AGG;}
+    |AVG_agg{$$=AVG_AGG;}
+    |COUNT_agg{$$=COUNT_AGG;}
+    |SUM_agg{$$=SUM_AGG;}
 load_data_stmt:
     LOAD DATA INFILE SSS INTO TABLE ID 
     {

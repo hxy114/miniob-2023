@@ -24,6 +24,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/join_logical_operator.h"
 #include "sql/operator/project_logical_operator.h"
 #include "sql/operator/explain_logical_operator.h"
+#include "sql/operator/agg_logical_operator.h"
 
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/calc_stmt.h"
@@ -83,6 +84,8 @@ RC LogicalPlanGenerator::create_plan(
 
   const std::vector<Table *> &tables = select_stmt->tables();
   const std::vector<Field> &all_fields = select_stmt->query_fields();
+  const std::vector<Agg> &all_aggs=select_stmt->query_aggs();
+  bool is_agg=select_stmt->is_agg();
   for (Table *table : tables) {
     std::vector<Field> fields;
     for (const Field &field : all_fields) {
@@ -120,8 +123,16 @@ RC LogicalPlanGenerator::create_plan(
       project_oper->add_child(std::move(table_oper));
     }
   }
+  if(is_agg){
+    unique_ptr<LogicalOperator>agg_oper(new AggLogicalOperator(all_aggs));
+    agg_oper->add_child(std::move(project_oper));
+    logical_operator.swap(agg_oper);
 
-  logical_operator.swap(project_oper);
+  }else{
+    logical_operator.swap(project_oper);
+  }
+
+
   return RC::SUCCESS;
 }
 

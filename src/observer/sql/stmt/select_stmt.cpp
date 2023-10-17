@@ -27,12 +27,16 @@ SelectStmt::~SelectStmt()
   }
 }
 
-static void wildcard_fields(Table *table, std::vector<Field> &field_metas)
+static void wildcard_fields(Table *table, std::vector<Field> &field_metas,std::vector<Agg> &aggs,const RelAttrSqlNode &rel,bool & is_agg)
 {
   const TableMeta &table_meta = table->table_meta();
   const int field_num = table_meta.field_num();
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
     field_metas.push_back(Field(table, table_meta.field(i)));
+    aggs.push_back(rel.agg);
+    if(rel.agg!=NO_AGG){
+      is_agg= true;
+    }
   }
 }
 
@@ -65,13 +69,15 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
 
   // collect query fields in `select` statement
   std::vector<Field> query_fields;
+  std::vector<Agg> query_aggs;
+  bool is_agg=false;
   for (int i = static_cast<int>(select_sql.attributes.size()) - 1; i >= 0; i--) {
     const RelAttrSqlNode &relation_attr = select_sql.attributes[i];
 
     if (common::is_blank(relation_attr.relation_name.c_str()) &&
         0 == strcmp(relation_attr.attribute_name.c_str(), "*")) {
       for (Table *table : tables) {
-        wildcard_fields(table, query_fields);
+        wildcard_fields(table, query_fields,query_aggs,relation_attr,is_agg);
       }
 
     } else if (!common::is_blank(relation_attr.relation_name.c_str())) {
@@ -84,7 +90,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
           return RC::SCHEMA_FIELD_MISSING;
         }
         for (Table *table : tables) {
-          wildcard_fields(table, query_fields);
+          wildcard_fields(table, query_fields,query_aggs,relation_attr,is_agg);
         }
       } else {
         auto iter = table_map.find(table_name);
@@ -95,7 +101,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
 
         Table *table = iter->second;
         if (0 == strcmp(field_name, "*")) {
-          wildcard_fields(table, query_fields);
+          wildcard_fields(table, query_fields,query_aggs,relation_attr,is_agg);
         } else {
           const FieldMeta *field_meta = table->table_meta().field(field_name);
           if (nullptr == field_meta) {
@@ -104,6 +110,10 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
           }
 
           query_fields.push_back(Field(table, field_meta));
+          query_aggs.push_back(relation_attr.agg);
+          if(relation_attr.agg!=NO_AGG){
+            is_agg= true;
+          }
         }
       }
     } else {
@@ -120,6 +130,21 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
       }
 
       query_fields.push_back(Field(table, field_meta));
+      query_aggs.push_back(relation_attr.agg);
+      if(relation_attr.agg!=NO_AGG){
+        is_agg= true;
+      }
+    }
+
+  }
+
+  //check agg
+  if(is_agg){
+    for(int i=0;i<query_aggs.size();i++){
+      if(query_aggs[i]==NO_AGG){
+        LOG_WARN("invalid argument. agg  is null. index=%d", i);
+        return RC::INVALID_ARGUMENT;
+      }
     }
   }
 
@@ -149,6 +174,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
   select_stmt->filter_stmt_ = filter_stmt;
+  select_stmt->query_aggs_.swap(query_aggs);
+  select_stmt->is_agg_=is_agg;
   stmt = select_stmt;
   return RC::SUCCESS;
 }

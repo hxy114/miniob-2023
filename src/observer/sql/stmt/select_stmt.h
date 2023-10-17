@@ -25,7 +25,6 @@ class FieldMeta;
 class FilterStmt;
 class Db;
 class Table;
-
 /**
  * @brief 表示select语句
  * @ingroup Statement
@@ -53,13 +52,24 @@ public:
   {
     return query_fields_;
   }
+  const std::vector<Agg> &query_aggs() const
+  {
+    return query_aggs_;
+  }
+  bool is_agg(){
+    return is_agg_;
+  }
   FilterStmt *filter_stmt() const
   {
     return filter_stmt_;
   }
 
+
 private:
   std::vector<Field> query_fields_;
   std::vector<Table *> tables_;
   FilterStmt *filter_stmt_ = nullptr;
+  bool is_agg_;
+  std::vector<Agg>query_aggs_;
+
 };
