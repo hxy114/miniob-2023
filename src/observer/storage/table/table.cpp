@@ -456,6 +456,33 @@ RC Table::delete_record(const Record &record)
   return rc;
 }
 
+RC Table::update_record(Record &record, const FieldMeta* field_meta, Value value)
+{
+  // delete
+  RC rc = delete_record(record);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("delete op in update failed.");
+    return rc;
+  }
+  // update
+  size_t copy_len = field_meta->len();
+  if (field_meta->type() == CHARS) {
+    const size_t data_len = strlen((const char *)value.data());
+    if (copy_len > data_len) {
+      copy_len = data_len + 1;
+    }
+  }
+  memcpy(record.data()+field_meta->offset(), value.data(), copy_len);
+  // insert
+  rc = insert_record(record);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("insert op in update failed.");
+    return rc;
+  }
+
+  return RC::SUCCESS;
+}
+
 RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
 {
   RC rc = RC::SUCCESS;
