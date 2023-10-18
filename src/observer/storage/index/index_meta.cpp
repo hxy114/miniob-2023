@@ -20,10 +20,11 @@ See the Mulan PSL v2 for more details. */
 #include "json/json.h"
 
 const static Json::StaticString FIELD_NAME("name");
+const static Json::StaticString INDEX_FIELD_NAMES("index_field_names");
 const static Json::StaticString FIELD_FIELD_NAME("field_name");
 const static Json::StaticString UNIQUE("unique");
 
-RC IndexMeta::init(const char *name, const FieldMeta &field,bool is_unique)
+RC IndexMeta::init(const char *name, std::vector<const FieldMeta *> &field,bool is_unique)
 {
   if (common::is_blank(name)) {
     LOG_ERROR("Failed to init index, name is empty.");
@@ -31,7 +32,9 @@ RC IndexMeta::init(const char *name, const FieldMeta &field,bool is_unique)
   }
 
   name_ = name;
-  field_ = field.name();
+  for(int i=0;i<field.size();i++){
+    field_.push_back(field[i]->name());
+  }
   is_unique_=is_unique;
   return RC::SUCCESS;
 }
@@ -39,24 +42,28 @@ RC IndexMeta::init(const char *name, const FieldMeta &field,bool is_unique)
 void IndexMeta::to_json(Json::Value &json_value) const
 {
   json_value[FIELD_NAME] = name_;
-  json_value[FIELD_FIELD_NAME] = field_;
+  Json::Value fields_value;
+  for (const std::string &field : field_) {
+    Json::Value field_value;
+    field_value[FIELD_NAME] = field;
+    fields_value.append(std::move(field_value));
+  }
+  json_value[INDEX_FIELD_NAMES] = std::move(fields_value);
   json_value[UNIQUE]=is_unique_;
 }
 
 RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, IndexMeta &index)
 {
   const Json::Value &name_value = json_value[FIELD_NAME];
-  const Json::Value &field_value = json_value[FIELD_FIELD_NAME];
+  const Json::Value &fields_values = json_value[INDEX_FIELD_NAMES];
   const Json::Value & is_unique=json_value[UNIQUE];
   if (!name_value.isString()) {
     LOG_ERROR("Index name is not a string. json value=%s", name_value.toStyledString().c_str());
     return RC::INTERNAL;
   }
 
-  if (!field_value.isString()) {
-    LOG_ERROR("Field name of index [%s] is not a string. json value=%s",
-        name_value.asCString(),
-        field_value.toStyledString().c_str());
+  if (!fields_values.isArray()) {
+    LOG_ERROR("Invalid index_fields_metas, json value=%s", fields_values.toStyledString().c_str());
     return RC::INTERNAL;
   }
   if(!is_unique.isBool()){
@@ -65,13 +72,20 @@ RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, I
     return RC::INTERNAL;
   }
   bool unique=is_unique.asBool();
-  const FieldMeta *field = table.field(field_value.asCString());
-  if (nullptr == field) {
-    LOG_ERROR("Deserialize index [%s]: no such field: %s", name_value.asCString(), field_value.asCString());
-    return RC::SCHEMA_FIELD_MISSING;
+  RC rc = RC::SUCCESS;
+  int field_num = fields_values.size();
+  std::vector< const  FieldMeta *> fields;
+  for (int i = 0; i < field_num; i++) {
+    const Json::Value &field_name_value = fields_values[i];
+    if (!field_name_value[FIELD_NAME].isString()) {
+      LOG_ERROR("Field name is not a string. json value=%s", field_name_value.toStyledString().c_str());
+      return RC::INTERNAL;
+    }
+    const FieldMeta *field = table.field(field_name_value[FIELD_NAME].asCString());
+    fields.push_back(field);
   }
 
-  return index.init(name_value.asCString(), *field,unique);
+  return index.init(name_value.asCString(), fields,unique);
 }
 
 const char *IndexMeta::name() const
@@ -79,14 +93,14 @@ const char *IndexMeta::name() const
   return name_.c_str();
 }
 
-const char *IndexMeta::field() const
+std::vector<std::string> IndexMeta::field() const
 {
-  return field_.c_str();
+  return field_;
 }
 bool IndexMeta::is_unique()const{
   return is_unique_;
 }
 void IndexMeta::desc(std::ostream &os) const
 {
-  os << "index name=" << name_ << ", field=" << field_<<", unique="<<is_unique_;
+ // os << "index name=" << name_ << ", field=" << field_<<", unique="<<is_unique_;
 }
