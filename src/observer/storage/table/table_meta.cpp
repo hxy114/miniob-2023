@@ -154,7 +154,9 @@ int TableMeta::sys_field_num() const
   }
   return static_cast<int>(trx_fields->size());
 }
-
+std::vector<IndexMeta> TableMeta::get_all_index()const{
+  return indexes_;
+}
 const IndexMeta *TableMeta::index(const char *name) const
 {
   for (const IndexMeta &index : indexes_) {

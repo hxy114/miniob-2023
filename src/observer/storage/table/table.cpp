@@ -341,7 +341,7 @@ RC Table::get_record_scanner(RecordFileScanner &scanner, Trx *trx, bool readonly
   return rc;
 }
 
-RC Table::create_index(Trx *trx, std::vector<const FieldMeta *>field_meta, const char *index_name)
+RC Table::create_index(Trx *trx, std::vector<const FieldMeta *>field_meta, const char *index_name,bool is_unique)
 {
   if (common::is_blank(index_name) || nullptr == field_meta[0]) {
     LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
@@ -349,7 +349,7 @@ RC Table::create_index(Trx *trx, std::vector<const FieldMeta *>field_meta, const
   }
 
   IndexMeta new_index_meta;
-  RC rc = new_index_meta.init(index_name, *field_meta[0]);
+  RC rc = new_index_meta.init(index_name, *field_meta[0],is_unique);
   if (rc != RC::SUCCESS) {
     LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s, field_name:%s", 
              name(), index_name, field_meta[0]->name());
@@ -458,13 +458,12 @@ RC Table::delete_record(const Record &record)
 
 RC Table::update_record(Record &record, std::vector<const FieldMeta*> field_meta, std::vector<Value> value)
 {
-  // delete
-  RC rc = delete_record(record);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("delete op in update failed.");
-    return rc;
-  }
+  //CHECK
   // update
+  Record newRecord;
+  char *tmp = (char *)malloc(record.len());
+  memcpy(tmp, record.data(), record.len());
+  newRecord.set_data_owner(tmp,record.len());
   for(int i=0;i<field_meta.size();i++){
     size_t copy_len = field_meta[i]->len();
     if (field_meta[i]->type() == CHARS) {
@@ -473,11 +472,40 @@ RC Table::update_record(Record &record, std::vector<const FieldMeta*> field_meta
         copy_len = data_len + 1;
       }
     }
-    memcpy(record.data()+field_meta[i]->offset(), value[i].data(), copy_len);
+    memcpy(newRecord.data()+field_meta[i]->offset(), value[i].data(), copy_len);
   }
 
+  std::vector<IndexMeta>indexMeta=get_all_index_meta();
+  for(int i=0;i<indexMeta.size();i++){
+    if(indexMeta[i].is_unique()){
+      Index* index=find_index(indexMeta[i].name());
+      auto offset=index->field_meta().offset();
+      auto key=newRecord.data()+offset;
+      auto scan=index->create_scanner(key,offset,true,key,offset,true);
+
+      RID rid;
+      for(;;){
+        RC rc=scan->next_entry(&rid);
+        if(rc==RC::SUCCESS&&rid!=record.rid()){
+          LOG_WARN("failed to insert  unique. rc=%s", strrc(rc));
+          return RC::INTERNAL;
+        }else{
+          break;
+        }
+      }
+
+    }
+  }
+  // delete
+  RC rc = delete_record(record);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("delete op in update failed.");
+    return rc;
+  }
+
+
   // insert
-  rc = insert_record(record);
+  rc = insert_record(newRecord);
   if (rc != RC::SUCCESS) {
     LOG_WARN("insert op in update failed.");
     return rc;
@@ -530,7 +558,9 @@ Index *Table::find_index_by_field(const char *field_name) const
   }
   return nullptr;
 }
-
+std::vector<IndexMeta>Table::get_all_index_meta()const{
+  return table_meta_.get_all_index();
+}
 RC Table::sync()
 {
   RC rc = RC::SUCCESS;
