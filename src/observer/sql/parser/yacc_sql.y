@@ -181,6 +181,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            command_wrapper
 %type <relation_list>       arg_list
 %type <update_list>         update_list
+%type <relation_list>       id_list
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -276,19 +277,40 @@ desc_table_stmt:
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID RBRACE
+    CREATE INDEX ID ON ID LBRACE ID id_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $3;
       create_index.relation_name = $5;
-      create_index.attribute_name = $7;
+      if($8==nullptr){
+      create_index.attribute_name.push_back($7);
+
+      }else{
+      $8->push_back($7);
+       create_index.attribute_name.swap(*$8);
+      }
+      std::reverse(create_index.attribute_name.begin(), create_index.attribute_name.end());
       free($3);
       free($5);
       free($7);
+      free($8);
     }
     ;
+id_list:
+  {
+  $$=nullptr;
+  }
+  |COMMA ID id_list{
+   if($3!=nullptr){
+   $$=$3;
+   }else{
+   $$=new std::vector<std::string>;
+   }
+   $$->push_back($2);
+   free($2);
 
+  }
 drop_index_stmt:      /*drop index 语句的语法解析树*/
     DROP INDEX ID ON ID
     {
