@@ -67,13 +67,36 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
   switch (stmt->type()) {
     case StmtType::SELECT: {
       SelectStmt *select_stmt = static_cast<SelectStmt *>(stmt);
-      bool with_table_name = select_stmt->tables().size() > 1;
+      if(select_stmt->is_agg()){
+        for(int i=0;i<select_stmt->attributes().size();i++){
+          if(select_stmt->attributes()[i].agg==MAX_AGG){
+            string name="max("+select_stmt->attributes()[i].attribute_name+")";
+            schema.append_cell(name.c_str());
+          }else if(select_stmt->attributes()[i].agg==MIN_AGG){
+            string name="min("+select_stmt->attributes()[i].attribute_name+")";
+            schema.append_cell(name.c_str());
+          }else if(select_stmt->attributes()[i].agg==AVG_AGG){
+            string name="avg("+select_stmt->attributes()[i].attribute_name+")";
+            schema.append_cell(name.c_str());
+          }else if(select_stmt->attributes()[i].agg==COUNT_AGG){
+            string name="count("+select_stmt->attributes()[i].attribute_name+")";
+            schema.append_cell(name.c_str());
+          }else if(select_stmt->attributes()[i].agg==SUM_AGG){
+            string name="sum("+select_stmt->attributes()[i].attribute_name+")";
+            schema.append_cell(name.c_str());
+          }
 
-      for (const Field &field : select_stmt->query_fields()) {
-        if (with_table_name) {
-          schema.append_cell(field.table_name(), field.field_name());
-        } else {
-          schema.append_cell(field.field_name());
+        }
+
+      }else{
+        bool with_table_name = select_stmt->tables().size() > 1;
+
+        for (const Field &field : select_stmt->query_fields()) {
+          if (with_table_name) {
+            schema.append_cell(field.table_name(), field.field_name());
+          } else {
+            schema.append_cell(field.field_name());
+          }
         }
       }
     } break;

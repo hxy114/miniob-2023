@@ -102,6 +102,11 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         LK
         INNER
         JOIN
+        MAX_agg
+        MIN_agg
+        AVG_agg
+        COUNT_agg
+         SUM_agg
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -122,6 +127,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   char *                            string;
   int                               number;
   float                             floats;
+  enum Agg                          agg;
 }
 
 %token <number> NUMBER
@@ -138,6 +144,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <value>               value
 %type <number>              number
 %type <comp>                comp_op
+%type <agg>                 agg
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
@@ -171,6 +178,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            help_stmt
 %type <sql_node>            exit_stmt
 %type <sql_node>            command_wrapper
+%type <relation_list>       arg_list
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -526,8 +534,17 @@ select_attr:
       RelAttrSqlNode attr;
       attr.relation_name  = "";
       attr.attribute_name = "*";
+      attr.agg=NO_AGG;
       $$->emplace_back(attr);
     }
+   /* | agg LBRACE arg_list RBRACE{
+         $$ = new std::vector<RelAttrSqlNode>;
+               RelAttrSqlNode attr;
+               attr.relation_name  = "";
+               attr.attribute_name = "*";
+               attr.agg=$1;
+               $$->emplace_back(attr);
+         }*/
     | rel_attr attr_list {
       if ($2 != nullptr) {
         $$ = $2;
@@ -538,19 +555,73 @@ select_attr:
       delete $1;
     }
     ;
+arg_list:
+ /* empty */
+    {
+      $$ = nullptr;
+    }
+    |'*' {
+    $$=new std::vector<std::string>;
+    $$->push_back("*");
 
+    }
+    |'*' COMMA arg_list{
+    if($3!=nullptr){
+    $$=$3;
+    }else{
+    $$=new std::vector<std::string>;
+    }
+
+     $$->push_back("*");
+    }
+    | ID {
+    $$=new std::vector<std::string>;
+    $$->push_back($1);
+    }
+    |ID COMMA arg_list{
+    if($3!=nullptr){
+        $$=$3;
+        }else{
+        $$=new std::vector<std::string>;
+        }
+        $$->push_back($1);
+    }
 rel_attr:
     ID {
       $$ = new RelAttrSqlNode;
       $$->attribute_name = $1;
+      $$->agg=NO_AGG;
+      $$->is_right=true;
       free($1);
     }
+    |agg LBRACE arg_list RBRACE{
+         $$ = new RelAttrSqlNode;
+         if($3==nullptr||$3->size()!=1){
+         $$->is_right=false;
+         }else{
+         $$->attribute_name = (*$3)[0];
+         $$->agg=$1;
+         }
+          free($3);
+
+         }
     | ID DOT ID {
       $$ = new RelAttrSqlNode;
       $$->relation_name  = $1;
       $$->attribute_name = $3;
+      $$->agg=NO_AGG;
+      $$->is_right=true;
       free($1);
       free($3);
+    }
+    | agg LBRACE ID DOT ID RBRACE{
+               $$ = new RelAttrSqlNode;
+               $$->relation_name  = $3;
+               $$->attribute_name = $5;
+               $$->is_right=true;
+               $$->agg=$1;
+               free($3);
+               free($5);
     }
     ;
 
@@ -698,7 +769,12 @@ comp_op:
     | LK {$$ = LIKE;}
     | NOT LK {$$ = NOT_LIKE;}
     ;
-
+agg:
+    MAX_agg{$$=MAX_AGG;}
+    |MIN_agg{$$=MIN_AGG;}
+    |AVG_agg{$$=AVG_AGG;}
+    |COUNT_agg{$$=COUNT_AGG;}
+    |SUM_agg{$$=SUM_AGG;}
 load_data_stmt:
     LOAD DATA INFILE SSS INTO TABLE ID 
     {
