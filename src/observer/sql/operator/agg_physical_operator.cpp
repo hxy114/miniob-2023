@@ -3,7 +3,7 @@
 //
 #include "sql/operator/agg_physical_operator.h"
 #include "common/lang/string.h"
-AggPhysicalOperator::AggPhysicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields): attributes_(attributes),fields_(fields)
+AggPhysicalOperator::AggPhysicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields): attributes_(attributes),fields_(fields),count_(0),finish_(false)
 {}
 
 RC AggPhysicalOperator::open(Trx *trx)
