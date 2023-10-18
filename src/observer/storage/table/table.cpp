@@ -456,7 +456,7 @@ RC Table::delete_record(const Record &record)
   return rc;
 }
 
-RC Table::update_record(Record &record, const FieldMeta* field_meta, Value value)
+RC Table::update_record(Record &record, std::vector<const FieldMeta*> field_meta, std::vector<Value> value)
 {
   // delete
   RC rc = delete_record(record);
@@ -465,14 +465,17 @@ RC Table::update_record(Record &record, const FieldMeta* field_meta, Value value
     return rc;
   }
   // update
-  size_t copy_len = field_meta->len();
-  if (field_meta->type() == CHARS) {
-    const size_t data_len = strlen((const char *)value.data());
-    if (copy_len > data_len) {
-      copy_len = data_len + 1;
+  for(int i=0;i<field_meta.size();i++){
+    size_t copy_len = field_meta[i]->len();
+    if (field_meta[i]->type() == CHARS) {
+      const size_t data_len = strlen((const char *)value[i].data());
+      if (copy_len > data_len) {
+        copy_len = data_len + 1;
+      }
     }
+    memcpy(record.data()+field_meta[i]->offset(), value[i].data(), copy_len);
   }
-  memcpy(record.data()+field_meta->offset(), value.data(), copy_len);
+
   // insert
   rc = insert_record(record);
   if (rc != RC::SUCCESS) {

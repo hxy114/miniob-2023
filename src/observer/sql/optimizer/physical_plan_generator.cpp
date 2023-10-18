@@ -240,11 +240,19 @@ RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, std::u
   }
 
   Table *table = update_oper.table();
-  const FieldMeta *field_meta = update_oper.field_meta();
-  Value value = update_oper.value();
-  oper = unique_ptr<PhysicalOperator>(new UpdatePhysicalOperator(table, field_meta, value));
+
+  oper = unique_ptr<PhysicalOperator>(new UpdatePhysicalOperator(table, update_oper.field_meta(), update_oper.value_map(),update_oper.select_map()));
 
   if (child_physical_oper) {
+    oper->add_child(std::move(child_physical_oper));
+  }
+  for(int i=1;i<child_opers.size();i++){
+
+    rc = create(*child_opers[i].get(), child_physical_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create physical operator. rc=%s", strrc(rc));
+      return rc;
+    }
     oper->add_child(std::move(child_physical_oper));
   }
   

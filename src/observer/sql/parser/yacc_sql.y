@@ -128,6 +128,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   int                               number;
   float                             floats;
   enum Agg                          agg;
+  std::vector<UpdateValue>*         update_list;
 }
 
 %token <number> NUMBER
@@ -179,6 +180,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            exit_stmt
 %type <sql_node>            command_wrapper
 %type <relation_list>       arg_list
+%type <update_list>         update_list
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -437,19 +439,73 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-    UPDATE ID SET ID EQ value where 
+    UPDATE ID SET update_list where
     {
       $$ = new ParsedSqlNode(SCF_UPDATE);
       $$->update.relation_name = $2;
-      $$->update.attribute_name = $4;
-      $$->update.value = *$6;
-      if ($7 != nullptr) {
-        $$->update.conditions.swap(*$7);
-        delete $7;
+      $$->update.updateValue_list.swap(*$4);
+
+      if ($5 != nullptr) {
+        $$->update.conditions.swap(*$5);
+        delete $5;
       }
       free($2);
       free($4);
     }
+update_list:
+   {
+   $$=nullptr;
+   }
+   |ID EQ value {
+
+      $$=new std::vector<UpdateValue>;
+
+
+
+      UpdateValue value;
+      value.is_select=false;
+      value.value=*$3;
+      value.attribute_name=$1;
+      $$->push_back(value);
+
+      }
+   |ID EQ value COMMA update_list{
+   if($5==nullptr){
+   $$=new std::vector<UpdateValue>;
+   }else{
+   $$=$5;
+   }
+   UpdateValue value;
+   value.is_select=false;
+   value.value=*$3;
+   value.attribute_name=$1;
+   $$->push_back(value);
+
+   }
+   |ID EQ  LBRACE select_stmt RBRACE {
+
+         $$=new std::vector<UpdateValue>;
+
+         UpdateValue value;
+         value.is_select=true;
+         value.selectSqlNode=$4->selection;
+         value.attribute_name=$1;
+         $$->push_back(value);
+
+      }
+   |ID EQ  LBRACE select_stmt RBRACE COMMA update_list{
+   if($7==nullptr){
+      $$=new std::vector<UpdateValue>;
+      }else{
+      $$=$7;
+      }
+      UpdateValue value;
+      value.is_select=true;
+      value.selectSqlNode=$4->selection;
+      value.attribute_name=$1;
+      $$->push_back(value);
+
+   }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
     SELECT select_attr FROM ID rel_list  where

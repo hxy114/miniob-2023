@@ -142,8 +142,9 @@ union YYSTYPE
   int                               number;
   float                             floats;
   enum Agg                          agg;
+  std::vector<UpdateValue>*         update_list;
 
-#line 147 "yacc_sql.hpp"
+#line 148 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

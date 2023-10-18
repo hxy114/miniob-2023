@@ -17,7 +17,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/rc.h"
 #include "sql/stmt/stmt.h"
 #include "storage/field/field_meta.h"
-
+#include "sql/stmt/select_stmt.h"
+#include <map>
 class Table;
 class FilterStmt;
 
@@ -29,8 +30,14 @@ class UpdateStmt : public Stmt
 {
 public:
   UpdateStmt() = default;
+  ~UpdateStmt(){
+    /*for(auto select:select_map_){
+      select.second->filter_stmt();
+    }
+    select_map_.clear();*/
+  }
   // UpdateStmt(Table *table, Value *values, int value_amount);
-  UpdateStmt(Table *table, Value value, int value_amount, FilterStmt *filter_stmt, const FieldMeta *field_meta);
+  UpdateStmt(Table *table, std::map<int,Value>value_map, std::map<int,SelectStmt*> select_map,FilterStmt *filter_stmt, std:: vector<const FieldMeta *>field_meta);
 
   StmtType type() const override { return StmtType::UPDATE; }
 
@@ -42,18 +49,16 @@ public:
   {
     return table_;
   }
-  Value value() const { return value_; }
-  int value_amount() const
-  {
-    return value_amount_;
-  }
+  std::map<int,Value> value_map() const { return value_map_; }
+  std::map<int,SelectStmt*> select_map() const { return select_map_; }
+
   FilterStmt *filter_stmt() const { return filter_stmt_; } 
-  const FieldMeta *field_meta() const { return field_meta_; }
+  std:: vector<const FieldMeta *> field_meta() const { return field_meta_; }
 
 private:
   Table *table_ = nullptr;
-  Value value_;
-  int value_amount_ = 0;
+  std::map<int,SelectStmt*> select_map_;
+  std::map<int,Value>value_map_;
   FilterStmt *filter_stmt_ = nullptr;
-  const FieldMeta *field_meta_;
+  std:: vector<const FieldMeta*> field_meta_;
 };

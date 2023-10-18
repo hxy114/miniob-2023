@@ -43,7 +43,7 @@ std::string physical_operator_type_name(PhysicalOperatorType type)
 }
 
 PhysicalOperator::~PhysicalOperator()
-{}
+{children_.clear();}
 
 std::string PhysicalOperator::name() const
 {

@@ -216,14 +216,27 @@ RC LogicalPlanGenerator::create_plan(
     LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
     return rc;
   }
-
-  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, update_stmt->field_meta(), update_stmt->value()));
+  map<int,int>select_map;
+  int index=0;
+  index=1;
+  for(auto select:update_stmt->select_map()){
+    select_map[index]= select.first;
+    index++;
+  }
+  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, update_stmt->field_meta(), update_stmt->value_map(),select_map));
 
   if (predicate_oper) {
     predicate_oper->add_child(std::move(table_get_oper));
     update_oper->add_child(std::move(predicate_oper));
   } else {
     update_oper->add_child(std::move(table_get_oper));
+
+  }
+  for(auto select:update_stmt->select_map()){
+    unique_ptr<LogicalOperator> logical_operator;
+    create_plan(
+        select.second, logical_operator);
+    update_oper->add_child(std::move(logical_operator));
   }
 
   logical_operator = std::move(update_oper);

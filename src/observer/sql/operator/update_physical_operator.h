@@ -12,7 +12,8 @@ class DeleteStmt;
 class UpdatePhysicalOperator : public PhysicalOperator
 {
 public:
-  UpdatePhysicalOperator(Table *table, const FieldMeta *field_meta, Value value) : table_(table), field_meta_(field_meta), value_(value)
+  UpdatePhysicalOperator(Table *table, std::vector<const FieldMeta *>field_meta, std::map<int,Value> value,std::map<int,int>select_map)
+      :table_(table), field_meta_(field_meta), value_map_(value),select_map_(select_map),is_muil_row_(false),is_start_(false)
   {}
 
   virtual ~UpdatePhysicalOperator() = default;
@@ -33,7 +34,13 @@ public:
 
 private:
   Table *table_ = nullptr;
-  const FieldMeta *field_meta_;
-  Value value_;
+
+
   Trx *trx_ = nullptr;
+  std::vector<const FieldMeta *>field_meta_;
+  std::map<int,Value>value_map_;
+  std::map<int,int>select_map_;
+  std::vector<Value>values_;
+  bool is_muil_row_;
+  bool is_start_;
 };
