@@ -29,9 +29,167 @@ RC AggPhysicalOperator::next()
   }
   bool is_start=false;
   std::vector<Value> values;
-
+  values.resize(attributes_.size());
+  count_.resize(attributes_.size());
+  for(int i=0;i<attributes_.size();i++){
+    values[i].set_null();
+    count_[i]=0;
+  }
   for(;;){
     if(children_[0]->next()==RC::SUCCESS){
+      auto tuple=children_[0]->current_tuple();
+      for(int i=0;i<values.size();i++){
+          if(attributes_[i].agg==COUNT_AGG){
+            if(fields_[i].field_name()=="*"){
+              if(values[i].attr_type()==NULLS){
+                values[i].set_int(1);
+              }else{
+                values[i].set_int(values[i].get_int()+1);
+              }
+            }else{
+              Value value;
+              tuple->find_cell(TupleCellSpec(fields_[i].table_name(), fields_[i].field_name()), value);
+              if(value.attr_type()!=NULLS){
+                if(values[i].attr_type()==NULLS){
+                  values[i].set_int(1);
+                }else{
+                  values[i].set_int(values[i].get_int()+1);
+                }
+              }
+
+            }
+          }else if(attributes_[i].agg==MAX_AGG){
+            Value value;
+            tuple->find_cell(TupleCellSpec(fields_[i].table_name(), fields_[i].field_name()), value);
+            if(value.attr_type()!=NULLS){
+              if(value.attr_type()==DATES){
+                if(values[i].attr_type()==NULLS){
+                  values[i].set_date(value.data());
+                }else{
+                  if(values[i].compare(value)<0){
+                    values[i].set_date(value.data());
+                  }
+                }
+
+              }else if(value.attr_type()==CHARS){
+                if(values[i].attr_type()==NULLS){
+                  values[i].set_string(value.data());
+                }else{
+                  if(values[i].compare(value)<0){
+                    values[i].set_string(value.data());
+                  }
+                }
+              }else if(value.attr_type()==INTS){
+                if(values[i].attr_type()==NULLS){
+                  values[i].set_int(value.get_int());
+                }else{
+                  if(values[i].compare(value)<0){
+                    values[i].set_int(value.get_int());
+                  }
+                }
+              }else if(value.attr_type()==FLOATS){
+                if(values[i].attr_type()==NULLS){
+                  values[i].set_float(value.get_float());
+                }else{
+                  if(values[i].compare(value)<0){
+                    values[i].set_float(value.get_float());
+                  }
+                }
+              }
+            }
+
+          }else if(attributes_[i].agg==MIN_AGG){
+            Value value;
+            tuple->find_cell(TupleCellSpec(fields_[i].table_name(), fields_[i].field_name()), value);
+            if(value.attr_type()!=NULLS){
+              if(value.attr_type()==DATES){
+                if(values[i].attr_type()==NULLS){
+                  values[i].set_date(value.data());
+                }else{
+                  if(values[i].compare(value)>0){
+                    values[i].set_date(value.data());
+                  }
+                }
+
+              }else if(value.attr_type()==CHARS){
+                if(values[i].attr_type()==NULLS){
+                  values[i].set_string(value.data());
+                }else{
+                  if(values[i].compare(value)>0){
+                    values[i].set_string(value.data());
+                  }
+                }
+              }else if(value.attr_type()==INTS){
+                if(values[i].attr_type()==NULLS){
+                  values[i].set_int(value.get_int());
+                }else{
+                  if(values[i].compare(value)>0){
+                    values[i].set_int(value.get_int());
+                  }
+                }
+              }else if(value.attr_type()==FLOATS){
+                if(values[i].attr_type()==NULLS){
+                  values[i].set_float(value.get_float());
+                }else{
+                  if(values[i].compare(value)>0){
+                    values[i].set_float(value.get_float());
+                  }
+                }
+              }
+            }
+
+          }else if(attributes_[i].agg==SUM_AGG||attributes_[i].agg==AVG_AGG){
+            Value value;
+            tuple->find_cell(TupleCellSpec(fields_[i].table_name(), fields_[i].field_name()), value);
+            if(value.attr_type()!=NULLS){
+              if(value.attr_type()==CHARS){
+                if(values[i].attr_type()==NULLS){
+                  auto f=common::string2float(value.data());
+                  values[i].set_float(f);
+                }else{
+                  auto f=common::string2float(value.data());
+                  values[i].set_float(values[i].get_float()+f);
+                }
+
+              }else if(value.attr_type()==INTS){
+                if(values[i].attr_type()==NULLS){
+                  auto f=common::int2float(value.get_int());
+                  values[i].set_float(f);
+                }else{
+                  auto f=common::int2float(value.get_int());
+                  values[i].set_float(values[i].get_float()+f);
+                }
+              }else if(value.attr_type()==FLOATS){
+                if(values[i].attr_type()==NULLS){
+                  values[i].set_float(value.get_float());
+                }else{
+                  values[i].set_float(values[i].get_float()+value.get_float());
+                }
+              }
+              count_[i]++;
+            }
+          }
+        }
+
+    }else{
+        for(int i=0;i<attributes_.size();i++){
+          if(attributes_[i].agg==AVG_AGG){
+            if(values[i].attr_type()!=NULLS){
+              values[i].set_float(values[i].get_float()/count_[i]);
+            }
+
+          }
+
+        }
+        tuple_.set_cells(values);
+        finish_= true;
+        return RC::SUCCESS;
+    }
+
+
+
+
+    /*if(children_[0]->next()==RC::SUCCESS){
       auto tuple=children_[0]->current_tuple();
       count_++;
       if(!is_start){
@@ -152,7 +310,7 @@ RC AggPhysicalOperator::next()
       tuple_.set_cells(values);
       finish_= true;
       return RC::SUCCESS;
-    }
+    }*/
   }
   //return children_[0]->next();
 }

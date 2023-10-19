@@ -126,6 +126,7 @@ count                                   RETURN_TOKEN(COUNT_agg);
 sum                                     RETURN_TOKEN(SUM_agg);
 unique                                  RETURN_TOKEN(UNIQUE);
 null                                    RETURN_TOKEN(NULLABLE);
+is                                      RETURN_TOKEN(IS);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     RETURN_TOKEN(RBRACE);

@@ -87,7 +87,12 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     LOG_WARN("invalid compare operator : %d", comp);
     return RC::INVALID_ARGUMENT;
   }
-
+  if(comp==IS_NOT_NULL||comp==IS_NULL){
+    if(condition.right_is_attr||condition.right_value.attr_type()!=NULLS){
+      LOG_WARN("invalid compare num : %d", comp);
+      return RC::INVALID_ARGUMENT;
+    }
+  }
   filter_unit = new FilterUnit;
 
   if (condition.left_is_attr) {

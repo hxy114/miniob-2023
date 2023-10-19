@@ -92,7 +92,7 @@ std::string wildcardToRegex(const std::string& wildcard) {
 }
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
-  if(left.attr_type()==NULLS||right.attr_type()==NULLS){
+  if((left.attr_type()==NULLS||right.attr_type()==NULLS)&&(comp_!=IS_NOT_NULL&&comp_!=IS_NULL)){
     result=false;
     return RC::SUCCESS;
   }
@@ -109,8 +109,17 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
     }else if(!std::regex_match(left.data(), reg)&&comp_!=LIKE){
       result=true;
     }
-  }
-  else{
+  }else if(comp_==IS_NOT_NULL||comp_==IS_NULL){
+    if(comp_==IS_NULL&&left.attr_type()==NULLS){
+      result=true;
+    }else if(comp_==IS_NULL&&left.attr_type()!=NULLS){
+      result= false;
+    }else if(comp_==IS_NOT_NULL&&left.attr_type()==NULLS){
+      result= false;
+    }else if(comp_==IS_NOT_NULL&&left.attr_type()!=NULLS){
+      result= true;
+    }
+  }else{
     int cmp_result = left.compare(right);
     result = false;
     switch (comp_) {

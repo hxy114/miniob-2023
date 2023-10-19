@@ -93,7 +93,9 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
 
       if (common::is_blank(relation_attr.relation_name.c_str()) &&
           0 == strcmp(relation_attr.attribute_name.c_str(), "*")) {
-        query_fields.push_back({});
+        FieldMeta *field_meta=new FieldMeta;
+        field_meta->init("*");
+        query_fields.push_back(Field(default_table, field_meta));
 
       } else if (!common::is_blank(relation_attr.relation_name.c_str())) {
         const char *table_name = relation_attr.relation_name.c_str();
@@ -104,7 +106,9 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
             LOG_WARN("invalid field name while table is *. attr=%s", field_name);
             return RC::SCHEMA_FIELD_MISSING;
           }
-          query_fields.push_back(Field());
+          FieldMeta *field_meta=new FieldMeta;
+          field_meta->init("*");
+          query_fields.push_back(Field(default_table, field_meta));
         } else {
           auto iter = table_map.find(table_name);
           if (iter == table_map.end()) {
@@ -114,7 +118,9 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
 
           Table *table = iter->second;
           if (0 == strcmp(field_name, "*")) {
-            query_fields.push_back(Field());
+            FieldMeta *field_meta=new FieldMeta;
+            field_meta->init("*");
+            query_fields.push_back(Field(table, field_meta));
           } else {
             const FieldMeta *field_meta = table->table_meta().field(field_name);
             if (nullptr == field_meta) {

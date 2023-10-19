@@ -33,6 +33,6 @@ private:
   ValueListTuple tuple_;
   std::vector<RelAttrSqlNode> attributes_;
   std::vector<Field>fields_;
-  int count_;
+  std::vector<int> count_;
   bool finish_;
 };
