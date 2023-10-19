@@ -51,6 +51,7 @@ public:
   {
     return &fields_;
   }
+  int find_field_index_by_name(const char *name)const;
   auto trx_fields() const -> const std::pair<const FieldMeta *, int>;
   
   int field_num() const;  // sys field included

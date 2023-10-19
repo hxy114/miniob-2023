@@ -11,7 +11,9 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     return RC::SUCCESS;
   }
   values_.resize(field_meta_.size());
-
+  for(int i=0;i<values_.size();i++){
+    values_[i].set_type(NULLS);
+  }
   std::unique_ptr<PhysicalOperator> &child = children_[0];
   RC rc = child->open(trx);
 
@@ -41,12 +43,18 @@ RC UpdatePhysicalOperator::open(Trx *trx)
             auto s= common::float2string(value.get_float());
             value.set_type(CHARS);
             value.set_string(s.c_str());
+          }else if(value_type==NULLS) {
+            if(!field_meta_[select_map_[i]]->is_null()) {
+              LOG_WARN("field type mismatch. ");
+              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+            }
+            value.set_null();
           }else{
-            LOG_WARN("field type mismatch. "
-              );
-            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+              LOG_WARN("field type mismatch. ");
+              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
 
-          }
+            }
+
         }else if(field_type==INTS){
           if(value_type==CHARS){
             auto d= common::string2float(value.get_string());
@@ -58,6 +66,12 @@ RC UpdatePhysicalOperator::open(Trx *trx)
             value.set_type(INTS);
             value.set_int(integer);
 
+          }else if(value_type==NULLS) {
+            if(!field_meta_[select_map_[i]]->is_null()) {
+              LOG_WARN("field type mismatch. ");
+              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+            }
+            value.set_null();
           }else{
             LOG_WARN("field type mismatch."
               );
@@ -72,10 +86,28 @@ RC UpdatePhysicalOperator::open(Trx *trx)
             auto d= common::string2float(value.get_string());
             value.set_type(FLOATS);
             value.set_float(d);
+          }else if(value_type==NULLS) {
+            if(!field_meta_[select_map_[i]]->is_null()) {
+              LOG_WARN("field type mismatch. ");
+              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+            }
+            value.set_null();
           }else{
             LOG_WARN("field type mismatch.");
             return RC::SCHEMA_FIELD_TYPE_MISMATCH;
           }
+        }else if(field_type==DATES){
+          if(value_type==NULLS){
+            if(!field_meta_[select_map_[i]]->is_null()){
+              LOG_WARN("field type mismatch.");
+              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+            }
+            value.set_null();
+          }else{
+            LOG_WARN("field type mismatch.");
+            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+          }
+
         }else{
           LOG_WARN("field type mismatch. ");
           return RC::SCHEMA_FIELD_TYPE_MISMATCH;

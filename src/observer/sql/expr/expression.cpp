@@ -92,6 +92,10 @@ std::string wildcardToRegex(const std::string& wildcard) {
 }
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
+  if(left.attr_type()==NULLS||right.attr_type()==NULLS){
+    result=false;
+    return RC::SUCCESS;
+  }
   RC rc = RC::SUCCESS;
   if(comp_==LIKE||comp_==NOT_LIKE){
     std::string regexPattern = wildcardToRegex(right.data());

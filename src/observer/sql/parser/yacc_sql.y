@@ -108,6 +108,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         COUNT_agg
          SUM_agg
          UNIQUE
+         NULLABLE
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -130,6 +131,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   float                             floats;
   enum Agg                          agg;
   std::vector<UpdateValue>*         update_list;
+  bool                              is_null;
 }
 
 %token <number> NUMBER
@@ -183,6 +185,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <relation_list>       arg_list
 %type <update_list>         update_list
 %type <relation_list>       id_list
+%type <is_null>             nullable
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -379,32 +382,45 @@ attr_def_list:
     ;
     
 attr_def:
-    ID type LBRACE number RBRACE 
+    ID type LBRACE number RBRACE nullable
     {
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
       $$->length = $4;
+      $$->is_null=$6;
       free($1);
     }
-    | ID type
+    | ID type  nullable
     {
     if ((AttrType)$2==DATES){
     $$ = new AttrInfoSqlNode;
               $$->type = (AttrType)$2;
               $$->name = $1;
               $$->length = 10;
+              $$->is_null=$3;
               free($1);
     }else{
     $$ = new AttrInfoSqlNode;
           $$->type = (AttrType)$2;
           $$->name = $1;
           $$->length = 4;
+          $$->is_null=$3;
           free($1);
     }
 
     }
     ;
+nullable:
+   {
+   $$=true;
+   }
+   |NULLABLE{
+   $$=true;
+   }
+   |NOT NULLABLE{
+   $$=false;
+   }
 number:
     NUMBER {$$ = $1;}
     ;
@@ -468,6 +484,10 @@ value:
          $$ = new Value(tmp,CHARS);
          free(tmp);
          }
+    |NULLABLE{
+      $$=new Value();
+      $$->set_null();
+    }
     ;
     
 delete_stmt:    /*  delete 语句的语法解析树*/

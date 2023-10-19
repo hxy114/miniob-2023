@@ -108,13 +108,14 @@ extern int yydebug;
     COUNT_agg = 309,               /* COUNT_agg  */
     SUM_agg = 310,                 /* SUM_agg  */
     UNIQUE = 311,                  /* UNIQUE  */
-    NUMBER = 312,                  /* NUMBER  */
-    FLOAT = 313,                   /* FLOAT  */
-    ID = 314,                      /* ID  */
-    SSS = 315,                     /* SSS  */
-    DATE = 316,                    /* DATE  */
-    PATTERN = 317,                 /* PATTERN  */
-    UMINUS = 318                   /* UMINUS  */
+    NULLABLE = 312,                /* NULLABLE  */
+    NUMBER = 313,                  /* NUMBER  */
+    FLOAT = 314,                   /* FLOAT  */
+    ID = 315,                      /* ID  */
+    SSS = 316,                     /* SSS  */
+    DATE = 317,                    /* DATE  */
+    PATTERN = 318,                 /* PATTERN  */
+    UMINUS = 319                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -123,7 +124,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 113 "yacc_sql.y"
+#line 114 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   ConditionSqlNode *                condition;
@@ -144,8 +145,9 @@ union YYSTYPE
   float                             floats;
   enum Agg                          agg;
   std::vector<UpdateValue>*         update_list;
+  bool                              is_null;
 
-#line 149 "yacc_sql.hpp"
+#line 151 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

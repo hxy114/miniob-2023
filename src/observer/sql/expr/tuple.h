@@ -24,7 +24,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/value.h"
 #include "sql/expr/expression.h"
 #include "storage/record/record.h"
-
+#include "storage/record/record_manager.h"
+#include "common/lang/bitmap.h"
 class Table;
 
 /**
@@ -172,9 +173,18 @@ public:
     }
 
     FieldExpr *field_expr = speces_[index];
+    const int normal_field_start_index = table_->table_meta().sys_field_num();
     const FieldMeta *field_meta = field_expr->field().meta();
-    cell.set_type(field_meta->type());
-    cell.set_data(this->record_->data() + field_meta->offset(), field_meta->len());
+    int null_bitmap_len = align8(speces_.size()-normal_field_start_index) / 8;
+    int null_bitmap_start=speces_[normal_field_start_index]->field().meta()->offset()-null_bitmap_len;
+    common::Bitmap null_bitmap(this->record_->data()+null_bitmap_start,null_bitmap_len);
+    if(null_bitmap.get_bit(index)){
+      cell.set_null();
+    }else{
+      cell.set_type(field_meta->type());
+      cell.set_data(this->record_->data() + field_meta->offset(), field_meta->len());
+    }
+
     return RC::SUCCESS;
   }
 

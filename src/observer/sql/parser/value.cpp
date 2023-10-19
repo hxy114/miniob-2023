@@ -149,12 +149,18 @@ void Value::set_value(const Value &value)
     case BOOLEANS: {
       set_boolean(value.get_boolean());
     } break;
+    case NULLS:{
+      set_null();
+    }
     case UNDEFINED: {
       ASSERT(false, "got an invalid value type");
     } break;
   }
 }
+void Value::set_null(){
 
+  attr_type_=NULLS;
+}
 const char *Value::data() const
 {
   switch (attr_type_) {
@@ -220,8 +226,10 @@ std::string Value::to_string() const
         os << '0';
         os << data_[i];
       }
-    }
-      break;
+    }break;
+    case NULLS:{
+      os<<"NULL";
+    }break;
     default: {
       LOG_WARN("unsupported attr type: %d", attr_type_);
     } break;

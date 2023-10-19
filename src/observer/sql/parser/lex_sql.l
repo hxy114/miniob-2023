@@ -125,6 +125,7 @@ avg                                     RETURN_TOKEN(AVG_agg);
 count                                   RETURN_TOKEN(COUNT_agg);
 sum                                     RETURN_TOKEN(SUM_agg);
 unique                                  RETURN_TOKEN(UNIQUE);
+null                                    RETURN_TOKEN(NULLABLE);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     RETURN_TOKEN(RBRACE);
