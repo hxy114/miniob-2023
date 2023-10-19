@@ -178,6 +178,8 @@ RC AggPhysicalOperator::next()
               values[i].set_float(values[i].get_float()/count_[i]);
             }
 
+          }else if(attributes_[i].agg==COUNT_AGG&&values[i].attr_type()==NULLS){
+            values[i].set_int(0);
           }
 
         }
