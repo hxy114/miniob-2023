@@ -186,6 +186,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <update_list>         update_list
 %type <relation_list>       id_list
 %type <is_null>             nullable
+%type <value_list>       insert_value
+%type <value_list>       insert_values
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -431,20 +433,43 @@ type:
     | DATE_T  {$$=DATES;}
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
-    INSERT INTO ID VALUES LBRACE value value_list RBRACE 
+    INSERT INTO ID VALUES insert_value insert_values
     {
       $$ = new ParsedSqlNode(SCF_INSERT);
       $$->insertion.relation_name = $3;
-      if ($7 != nullptr) {
-        $$->insertion.values.swap(*$7);
+      if ($6 != nullptr) {
+        $$->insertion.values.swap(*$6);
       }
-      $$->insertion.values.emplace_back(*$6);
+      $$->insertion.values.insert($$->insertion.values.begin(),$5->begin(),$5->end());
       std::reverse($$->insertion.values.begin(), $$->insertion.values.end());
-      delete $6;
+      delete $5;
       free($3);
     }
     ;
-
+insert_value:
+    LBRACE value value_list RBRACE {
+	if ($3 != nullptr) {
+        $$ = $3;
+        } else {
+        $$ = new std::vector<Value>;
+        }
+        $$->emplace_back(*$2);
+         delete $2;
+    }
+insert_values:
+    /* empty */
+    {
+    $$=nullptr;
+    }
+    |COMMA insert_value insert_values{
+	if ($3 != nullptr) {
+                $$ = $3;
+              } else {
+                $$ = new std::vector<Value>;
+              }
+              $$->insert($$->begin(),$2->begin(),$2->end());
+              delete $2;
+    }
 value_list:
     /* empty */
     {

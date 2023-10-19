@@ -26,47 +26,53 @@ InsertPhysicalOperator::InsertPhysicalOperator(Table *table, vector<Value> &&val
 
 RC InsertPhysicalOperator::open(Trx *trx)
 {
-  Record record;
 
-  RC rc = table_->make_record(static_cast<int>(values_.size()), values_.data(), record);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to make record. rc=%s", strrc(rc));
-    return rc;
-  }
-  std::vector<IndexMeta>indexMeta=table_->get_all_index_meta();
-  for(int i=0;i<indexMeta.size();i++){
-    if(indexMeta[i].is_unique()){
-      Index* index=table_->find_index(indexMeta[i].name());
-      auto offset=index->field_meta()[0].offset();
-      auto key=record.data()+offset;
-      auto scan=index->create_scanner(key,offset,true,key,offset,true);
-      RID rid;
-      for(;;){
-        RC rc=scan->next_entry(&rid);
-        if(rc==RC::SUCCESS){
-          Record record1;
-          table_->get_record(rid,record1);
-          bool same=true;
-          for(int j=0;j<index->field_meta().size();j++){
-            for(int x=index->field_meta()[j].offset();x<index->field_meta()[j].len()+index->field_meta()[j].offset();x++){
-                if(record.data()[x]!=record1.data()[x]){
-                  same= false;
+
+  RC rc;
+  const int field_num=table_->table_meta().field_num()-table_->table_meta().sys_field_num();
+  for(int j=0;j<values_.size();j+=field_num) {
+    Record record;
+    rc = table_->make_record(field_num, values_.data(), record, j);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to make record. rc=%s", strrc(rc));
+      return rc;
+    }
+    std::vector<IndexMeta> indexMeta = table_->get_all_index_meta();
+    for (int i = 0; i < indexMeta.size(); i++) {
+      if (indexMeta[i].is_unique()) {
+        Index *index  = table_->find_index(indexMeta[i].name());
+        auto   offset = index->field_meta()[0].offset();
+        auto   key    = record.data() + offset;
+        auto   scan   = index->create_scanner(key, offset, true, key, offset, true);
+        RID    rid;
+        for (;;) {
+          RC rc = scan->next_entry(&rid);
+          if (rc == RC::SUCCESS) {
+            Record record1;
+            table_->get_record(rid, record1);
+            bool same = true;
+            for (int j = 0; j < index->field_meta().size(); j++) {
+              for (int x = index->field_meta()[j].offset();
+                   x < index->field_meta()[j].len() + index->field_meta()[j].offset();
+                   x++) {
+                if (record.data()[x] != record1.data()[x]) {
+                  same = false;
                 }
+              }
             }
-          }
-          if(same){
-            LOG_WARN("failed to insert  unique. rc=%s", strrc(rc));
-            return RC::INTERNAL;
-          }
+            if (same) {
+              LOG_WARN("failed to insert  unique. rc=%s", strrc(rc));
+              return RC::INTERNAL;
+            }
 
-        }else{
-          break;
+          } else {
+            break;
+          }
         }
       }
-
     }
+    rc = trx->insert_record(table_, record);
   }
-  rc = trx->insert_record(table_, record);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to insert record by transaction. rc=%s", strrc(rc));
   }

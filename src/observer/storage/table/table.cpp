@@ -273,7 +273,7 @@ const TableMeta &Table::table_meta() const
   return table_meta_;
 }
 
-RC Table::make_record(int value_num, const Value *values, Record &record)
+RC Table::make_record(int value_num, const Value *values, Record &record,int index)
 {
   // 检查字段类型是否一致
   if (value_num + table_meta_.sys_field_num() != table_meta_.field_num()) {
@@ -284,7 +284,7 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   const int normal_field_start_index = table_meta_.sys_field_num();
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
-    const Value &value = values[i];
+    const Value &value = values[i+index];
     if (value.attr_type()!=NULLS&&field->type() != value.attr_type()) {
       LOG_ERROR("Invalid value type. table name =%s, field name=%s, type=%d, but given=%d",
                 table_meta_.name(), field->name(), field->type(), value.attr_type());
@@ -301,7 +301,7 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   common::Bitmap null_bitmap(record_data+null_bitmap_start,null_bitmap_len);
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
-    const Value &value = values[i];
+    const Value &value = values[i+index];
     size_t copy_len = field->len();
     if(value.attr_type()==NULLS){
     null_bitmap.set_bit(i);
