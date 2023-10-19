@@ -106,8 +106,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         MIN_agg
         AVG_agg
         COUNT_agg
-         SUM_agg
-         UNIQUE
+        SUM_agg
+        UNIQUE
+        AS
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -562,6 +563,7 @@ select_stmt:        /*  select 语句的语法解析树*/
            if ($5 != nullptr) {
              $$->selection.relations.swap($5->relations);
              $$->selection.conditions.swap($5->conditions);
+             $$->selection.alias_map.insert($5->alias_map.begin(), $5->alias_map.end());
              delete $5;
            }
            $$->selection.relations.push_back($4);
@@ -570,6 +572,29 @@ select_stmt:        /*  select 语句的语法解析树*/
            if ($6 != nullptr) {
              $$->selection.conditions.insert($$->selection.conditions.begin(),$6->begin(),$6->end());
              delete $6;
+           }
+           free($4);
+         }
+    | SELECT select_attr FROM ID AS ID rel_list where
+         {
+           $$ = new ParsedSqlNode(SCF_SELECT);
+           if ($2 != nullptr) {
+             $$->selection.attributes.swap(*$2);
+             delete $2;
+           }
+           if ($7 != nullptr) {
+             $$->selection.relations.swap($7->relations);
+             $$->selection.conditions.swap($7->conditions);
+             $$->selection.alias_map.insert($7->alias_map.begin(), $7->alias_map.end());
+             delete $7;
+           }
+           $$->selection.relations.push_back($4);
+           $$->selection.alias_map.insert({$6, $4});
+           std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
+
+           if ($8 != nullptr) {
+             $$->selection.conditions.insert($$->selection.conditions.begin(),$8->begin(),$8->end());
+             delete $8;
            }
            free($4);
          }
@@ -705,6 +730,19 @@ rel_attr:
           free($3);
 
          }
+    |agg LBRACE arg_list RBRACE AS ID{
+         $$ = new RelAttrSqlNode;
+         if($3==nullptr||$3->size()!=1){
+         $$->is_right=false;
+         }else{
+         $$->attribute_name = (*$3)[0];
+         $$->agg=$1;
+         }
+         $$->alias_name = $6;
+          free($3);
+          free($6);
+
+         }
     | ID DOT ID {
       $$ = new RelAttrSqlNode;
       $$->relation_name  = $1;
@@ -723,6 +761,38 @@ rel_attr:
                free($3);
                free($5);
     }
+    | agg LBRACE ID DOT ID RBRACE AS ID{
+               $$ = new RelAttrSqlNode;
+               $$->relation_name  = $3;
+               $$->attribute_name = $5;
+               $$->is_right=true;
+               $$->alias_name = $8;
+               $$->agg=$1;
+               free($3);
+               free($5);
+               free($8);
+    }
+    | ID AS ID {
+      $$ = new RelAttrSqlNode;
+      $$->attribute_name = $1;
+      $$->agg=NO_AGG;
+      $$->is_right=true;
+      /* 不需要考虑列的别名重复 */
+      $$->alias_name = $3;
+      free($1);
+    }
+    | ID DOT ID AS ID {
+      $$ = new RelAttrSqlNode;
+      $$->relation_name  = $1;
+      $$->attribute_name = $3;
+      $$->agg=NO_AGG;
+      $$->is_right=true;
+      /* 不需要考虑列的别名重复 */
+      $$->alias_name = $5;
+      free($1);
+      free($3);
+    }
+
     ;
 
 attr_list:
@@ -755,6 +825,16 @@ rel_list:
       }
 
       $$->relations.push_back($2);
+      free($2);
+    }
+    | COMMA ID AS ID rel_list {
+      if ($5 != nullptr) {
+        $$ = $5;
+      } else {
+        $$ = new InnerJoinSqlNode;
+      }
+      $$->relations.push_back($2);
+      $$->alias_map.insert({$4, $2});
       free($2);
     }
     |INNER JOIN ID on rel_list {

@@ -54,10 +54,29 @@ Tuple *ProjectPhysicalOperator::current_tuple()
   return &tuple_;
 }
 
-void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta *field_meta)
+void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta *field_meta, const std::unordered_map<std::string, std::string> &col_alias_map, const std::unordered_map<std::string, std::string> &alias_map)
 {
   // 对单表来说，展示的(alias) 字段总是字段名称，
   // 对多表查询来说，展示的alias 需要带表名字
-  TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), field_meta->name());
+  std::string table_name = table->name();
+  std::string alias_name = field_meta->name();
+
+  if (col_alias_map.find(alias_name) != col_alias_map.end()) {
+      alias_name = col_alias_map.at(alias_name);
+    }
+
+  if (!table_name.empty()) {
+    // 多表查询
+    for (auto it = alias_map.begin(); it != alias_map.end(); it++) {
+      if (it->second == table_name) {
+        table_name = it->first;
+        alias_name = table_name + "." + alias_name;
+        break;
+      }
+    }
+  }
+
+  TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), alias_name.c_str());
+  // TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), field_meta->name());
   tuple_.add_cell_spec(spec);
 }

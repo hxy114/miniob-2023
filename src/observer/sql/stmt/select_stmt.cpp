@@ -75,6 +75,23 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
       }
     }
   }
+
+  // 将别名也添加到table_map中去，为了Filter中查找&
+  std::unordered_map<std::string, std::string> alias_map(select_sql.alias_map);
+  for (auto it = alias_map.begin(); it != alias_map.end(); it++) {
+    if (table_map.find(it->second) != table_map.end()) {
+      table_map.insert(std::pair<std::string, Table *>(it->first, table_map[it->second]));
+    }
+  }
+
+  // 为列的别名生成别名映射关系
+  std::unordered_map<std::string, std::string> col_alias_map;
+  for (auto &attribute : select_sql.attributes) {
+    if (!attribute.alias_name.empty()) {
+      col_alias_map.insert(std::pair<std::string, std::string>(attribute.attribute_name, attribute.alias_name));
+    }
+  }
+  
   if(is_agg){
     if(agg_num!=static_cast<int>(select_sql.attributes.size())){
       LOG_WARN("invalid argument. agg_num  wrong. ");
@@ -96,8 +113,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
         query_fields.push_back({});
 
       } else if (!common::is_blank(relation_attr.relation_name.c_str())) {
-        const char *table_name = relation_attr.relation_name.c_str();
-        const char *field_name = relation_attr.attribute_name.c_str();
+        const char *table_name = relation_attr.relation_name.c_str(); // 此处table_name可能为别名
+        const char *field_name = relation_attr.attribute_name.c_str(); // 此处field_name可能有别名
 
         if (0 == strcmp(table_name, "*")) {
           if (0 != strcmp(field_name, "*")) {
@@ -161,6 +178,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
     auto attributes(select_sql.attributes);
     std::reverse(attributes.begin(),attributes.end());
     select_stmt->attributes_.swap(attributes);
+    select_stmt->alias_map_.swap(alias_map);
+    select_stmt->col_alias_map_.swap(col_alias_map);
     select_stmt->filter_stmt_ = filter_stmt;
     select_stmt->query_fields_.swap(query_fields);
     select_stmt->is_agg_= true;
@@ -180,8 +199,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
         }
 
       } else if (!common::is_blank(relation_attr.relation_name.c_str())) {
-        const char *table_name = relation_attr.relation_name.c_str();
-        const char *field_name = relation_attr.attribute_name.c_str();
+        const char *table_name = relation_attr.relation_name.c_str();  // 此处table_name可能为别名
+        const char *field_name = relation_attr.attribute_name.c_str(); // 此处field_name可能有别名
 
         if (0 == strcmp(table_name, "*")) {
           if (0 != strcmp(field_name, "*")) {
@@ -236,6 +255,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
 
     // create filter statement in `where` statement
     FilterStmt *filter_stmt = nullptr;
+    // 不需要考虑使用列的别名进行运算和比较,但此时conditions中的表名可能为别名，并且alias_name字段为空
     RC rc = FilterStmt::create(db,
         default_table,
         &table_map,
@@ -251,6 +271,11 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
     SelectStmt *select_stmt = new SelectStmt();
     // TODO add expression copy
     select_stmt->tables_.swap(tables);
+    auto attributes(select_sql.attributes);
+    std::reverse(attributes.begin(),attributes.end());
+    select_stmt->attributes_.swap(attributes);
+    select_stmt->alias_map_.swap(alias_map);
+    select_stmt->col_alias_map_.swap(col_alias_map);
     select_stmt->query_fields_.swap(query_fields);
     select_stmt->filter_stmt_ = filter_stmt;
     select_stmt->is_agg_= false;

@@ -93,6 +93,8 @@ RC LogicalPlanGenerator::create_plan(
   const std::vector<RelAttrSqlNode> &all_attributes=select_stmt->attributes();
   bool is_agg=select_stmt->is_agg();
 
+  std::unordered_map<std::string, std::string> alias_map(select_stmt->alias_map());
+
   for (Table *table : tables) {
   /*  std::vector<Field> fields;
     for (const Field &field : all_fields) {
@@ -111,8 +113,6 @@ RC LogicalPlanGenerator::create_plan(
       table_oper = unique_ptr<LogicalOperator>(join_oper);
     }
   }
-
-
 
   unique_ptr<LogicalOperator> predicate_oper;
   RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
@@ -137,7 +137,8 @@ RC LogicalPlanGenerator::create_plan(
     logical_operator.swap(agg_oper);
     return RC::SUCCESS;
   }else{
-    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields));
+    std::unordered_map<std::string, std::string> col_alias_map = select_stmt->col_alias_map();
+    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields, col_alias_map, alias_map));
     if (predicate_oper) {
       if (table_oper) {
         predicate_oper->add_child(std::move(table_oper));

@@ -64,6 +64,14 @@ public:
   {
     return filter_stmt_;
   }
+  std::unordered_map<std::string, std::string> alias_map()
+  {
+    return alias_map_;
+  }
+  std::unordered_map<std::string, std::string> col_alias_map()
+  {
+    return col_alias_map_;
+  }
 
 private:
   std::vector<Field> query_fields_;
@@ -71,4 +79,6 @@ private:
   FilterStmt *filter_stmt_ = nullptr;
   bool is_agg_;
   std::vector<RelAttrSqlNode> attributes_;
+  std::unordered_map<std::string, std::string> alias_map_;  // 
+  std::unordered_map<std::string, std::string> col_alias_map_;
 };

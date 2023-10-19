@@ -67,9 +67,14 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
   switch (stmt->type()) {
     case StmtType::SELECT: {
       SelectStmt *select_stmt = static_cast<SelectStmt *>(stmt);
+      std::unordered_map<std::string, std::string> alias_map(select_stmt->alias_map());
       if(select_stmt->is_agg()){
         for(int i=0;i<select_stmt->attributes().size();i++){
-          if(select_stmt->attributes()[i].agg==MAX_AGG){
+          if (select_stmt->col_alias_map().contains(select_stmt->attributes()[i].attribute_name)) {
+            string name=select_stmt->col_alias_map()[select_stmt->attributes()[i].attribute_name];
+            schema.append_cell(name.c_str());
+          }
+          else if(select_stmt->attributes()[i].agg==MAX_AGG){
             string name="max("+select_stmt->attributes()[i].attribute_name+")";
             schema.append_cell(name.c_str());
           }else if(select_stmt->attributes()[i].agg==MIN_AGG){
@@ -92,10 +97,23 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
         bool with_table_name = select_stmt->tables().size() > 1;
 
         for (const Field &field : select_stmt->query_fields()) {
+          std::string field_name = field.field_name();
+          if (select_stmt->col_alias_map().find(field_name) != select_stmt->col_alias_map().end()) {
+            field_name = select_stmt->col_alias_map()[field_name];
+          }
+
           if (with_table_name) {
-            schema.append_cell(field.table_name(), field.field_name());
+            std::string table_name = field.table_name();
+            for (auto it = alias_map.begin(); it!=alias_map.end(); it++) {
+              if (it->second == table_name) {
+                table_name = it->first;
+                break;
+              }
+            }
+
+            schema.append_cell(table_name.c_str(), field_name.c_str());
           } else {
-            schema.append_cell(field.field_name());
+            schema.append_cell(field_name.c_str());
           }
         }
       }
