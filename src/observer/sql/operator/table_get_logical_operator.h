@@ -24,7 +24,7 @@ See the Mulan PSL v2 for more details. */
 class TableGetLogicalOperator : public LogicalOperator
 {
 public:
-  TableGetLogicalOperator(Table *table, const std::vector<Field> &fields, bool readonly);
+  TableGetLogicalOperator(Table *table, bool readonly);
   virtual ~TableGetLogicalOperator() = default;
 
   LogicalOperatorType type() const override

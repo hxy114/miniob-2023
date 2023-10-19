@@ -53,6 +53,13 @@ public:
   {
     return query_fields_;
   }
+  const std::vector<RelAttrSqlNode> &attributes() const
+  {
+    return attributes_;
+  }
+  bool is_agg(){
+    return is_agg_;
+  }
   FilterStmt *filter_stmt() const
   {
     return filter_stmt_;
@@ -62,4 +69,6 @@ private:
   std::vector<Field> query_fields_;
   std::vector<Table *> tables_;
   FilterStmt *filter_stmt_ = nullptr;
+  bool is_agg_;
+  std::vector<RelAttrSqlNode> attributes_;
 };

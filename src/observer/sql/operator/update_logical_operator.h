@@ -9,7 +9,7 @@
 class UpdateLogicalOperator : public LogicalOperator 
 {
 public:
-  UpdateLogicalOperator(Table *table, const FieldMeta *field_meta, Value value);
+  UpdateLogicalOperator(Table *table, std::vector<const FieldMeta *>field_meta, std::map<int,Value> value,std::map<int,int>select_map);
   virtual ~UpdateLogicalOperator() = default;
 
   LogicalOperatorType type() const override
@@ -20,11 +20,13 @@ public:
   {
     return table_;
   }
-  const FieldMeta *field_meta() { return field_meta_; }
-  Value value() const { return value_; }
-
+  std::vector<const FieldMeta *>field_meta() { return field_meta_; }
+  std::map<int,Value> value_map() const { return value_map_; }
+  std::map<int,int> select_map() const { return select_map_; }
 private:
   Table *table_ = nullptr;
-  const FieldMeta *field_meta_;
-  Value value_;
+  std::vector<const FieldMeta *>field_meta_;
+  std::map<int,Value>value_map_;
+  std::map<int,int>select_map_;//第n个child_opr对应那一个value.
+
 };

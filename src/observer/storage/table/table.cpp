@@ -156,18 +156,23 @@ RC Table::open(const char *meta_file, const char *base_dir)
   const int index_num = table_meta_.index_num();
   for (int i = 0; i < index_num; i++) {
     const IndexMeta *index_meta = table_meta_.index(i);
-    const FieldMeta *field_meta = table_meta_.field(index_meta->field());
-    if (field_meta == nullptr) {
-      LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
-                name(), index_meta->name(), index_meta->field());
-      // skip cleanup
-      //  do all cleanup action in destructive Table function
-      return RC::INTERNAL;
+    std::vector<const FieldMeta *> field_metas;
+    std::vector<std::string> field=index_meta->field();
+    for(int i=0;i<field.size();i++){
+      const FieldMeta *field_meta = table_meta_.field(field[i].c_str());
+      if (field_meta == nullptr) {
+        LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
+                name(), index_meta->name(), index_meta->field()[i].c_str());
+        // skip cleanup
+        //  do all cleanup action in destructive Table function
+        return RC::INTERNAL;
+      }
+      field_metas.push_back(field_meta);
     }
 
     BplusTreeIndex *index = new BplusTreeIndex();
     std::string index_file = table_index_file(base_dir, name(), index_meta->name());
-    rc = index->open(index_file.c_str(), *index_meta, *field_meta);
+    rc = index->open(index_file.c_str(), *index_meta, field_metas);
     if (rc != RC::SUCCESS) {
       delete index;
       LOG_ERROR("Failed to open index. table=%s, index=%s, file=%s, rc=%s",
@@ -341,25 +346,25 @@ RC Table::get_record_scanner(RecordFileScanner &scanner, Trx *trx, bool readonly
   return rc;
 }
 
-RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_name)
+RC Table::create_index(Trx *trx, std::vector<const FieldMeta *>field_meta, const char *index_name,bool is_unique)
 {
-  if (common::is_blank(index_name) || nullptr == field_meta) {
+  if (common::is_blank(index_name) || nullptr == field_meta[0]) {
     LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
     return RC::INVALID_ARGUMENT;
   }
 
   IndexMeta new_index_meta;
-  RC rc = new_index_meta.init(index_name, *field_meta);
+  RC rc = new_index_meta.init(index_name, field_meta,is_unique);
   if (rc != RC::SUCCESS) {
     LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s, field_name:%s", 
-             name(), index_name, field_meta->name());
+             name(), index_name, field_meta[0]->name());
     return rc;
   }
 
   // 创建索引相关数据
   BplusTreeIndex *index = new BplusTreeIndex();
   std::string index_file = table_index_file(base_dir_.c_str(), name(), index_name);
-  rc = index->create(index_file.c_str(), new_index_meta, *field_meta);
+  rc = index->create(index_file.c_str(), new_index_meta, field_meta);
   if (rc != RC::SUCCESS) {
     delete index;
     LOG_ERROR("Failed to create bplus tree index. file name=%s, rc=%d:%s", index_file.c_str(), rc, strrc(rc));
@@ -456,25 +461,78 @@ RC Table::delete_record(const Record &record)
   return rc;
 }
 
-RC Table::update_record(Record &record, const FieldMeta* field_meta, Value value)
+RC Table::update_record(Record &record, std::vector<const FieldMeta*> field_meta, std::vector<Value> value)
 {
+  //CHECK
+  // update
+  Record newRecord;
+  char *tmp = (char *)malloc(record.len());
+  memcpy(tmp, record.data(), record.len());
+  newRecord.set_data_owner(tmp,record.len());
+  for(int i=0;i<field_meta.size();i++){
+    size_t copy_len = field_meta[i]->len();
+    if (field_meta[i]->type() == CHARS) {
+      const size_t data_len = strlen((const char *)value[i].data());
+      if (copy_len > data_len) {
+        copy_len = data_len + 1;
+      }
+    }
+    memcpy(newRecord.data()+field_meta[i]->offset(), value[i].data(), copy_len);
+  }
+
+  std::vector<IndexMeta>indexMeta=get_all_index_meta();
+  for(int i=0;i<indexMeta.size();i++){
+    if(indexMeta[i].is_unique()){
+      Index* index=find_index(indexMeta[i].name());
+      auto offset=index->field_meta()[0].offset();
+      auto key=newRecord.data()+offset;
+      auto scan=index->create_scanner(key,offset,true,key,offset,true);
+
+      RID rid;
+      for(;;){
+        RC rc=scan->next_entry(&rid);
+        if(rc==RC::SUCCESS&&rid!=record.rid()){
+          Record record1;
+          get_record(rid,record1);
+          bool same=true;
+          for(int j=0;j<index->field_meta().size();j++){
+            for(int x=index->field_meta()[j].offset();x<index->field_meta()[j].len()+index->field_meta()[j].offset();x++){
+              if(newRecord.data()[x]!=record1.data()[x]){
+                same= false;
+              }
+            }
+          }
+          if(same){
+            LOG_WARN("failed to insert  unique. rc=%s", strrc(rc));
+            return RC::INTERNAL;
+          }
+
+        }else{
+          break;
+        }
+      }
+     /* for(;;){
+        RC rc=scan->next_entry(&rid);
+        if(rc==RC::SUCCESS&&rid!=record.rid()){
+          LOG_WARN("failed to insert  unique. rc=%s", strrc(rc));
+          return RC::INTERNAL;
+        }else{
+          break;
+        }
+      }*/
+
+    }
+  }
   // delete
   RC rc = delete_record(record);
   if (rc != RC::SUCCESS) {
     LOG_WARN("delete op in update failed.");
     return rc;
   }
-  // update
-  size_t copy_len = field_meta->len();
-  if (field_meta->type() == CHARS) {
-    const size_t data_len = strlen((const char *)value.data());
-    if (copy_len > data_len) {
-      copy_len = data_len + 1;
-    }
-  }
-  memcpy(record.data()+field_meta->offset(), value.data(), copy_len);
+
+
   // insert
-  rc = insert_record(record);
+  rc = insert_record(newRecord);
   if (rc != RC::SUCCESS) {
     LOG_WARN("insert op in update failed.");
     return rc;
@@ -527,7 +585,9 @@ Index *Table::find_index_by_field(const char *field_name) const
   }
   return nullptr;
 }
-
+std::vector<IndexMeta>Table::get_all_index_meta()const{
+  return table_meta_.get_all_index();
+}
 RC Table::sync()
 {
   RC rc = RC::SUCCESS;

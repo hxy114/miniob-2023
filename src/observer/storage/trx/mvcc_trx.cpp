@@ -160,7 +160,7 @@ RC MvccTrx::insert_record(Table *table, Record &record)
   return rc;
 }
 
-RC MvccTrx::update_record(Table *table, Record &record, const FieldMeta *field_meta, Value value)
+RC MvccTrx::update_record(Table *table, Record &record, std::vector<const FieldMeta *>field_meta, std::vector<Value> value)
 {
   return RC::UNIMPLENMENT;
 }

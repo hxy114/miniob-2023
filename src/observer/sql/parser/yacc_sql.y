@@ -102,6 +102,12 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         LK
         INNER
         JOIN
+        MAX_agg
+        MIN_agg
+        AVG_agg
+        COUNT_agg
+         SUM_agg
+         UNIQUE
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -122,6 +128,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   char *                            string;
   int                               number;
   float                             floats;
+  enum Agg                          agg;
+  std::vector<UpdateValue>*         update_list;
 }
 
 %token <number> NUMBER
@@ -138,6 +146,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <value>               value
 %type <number>              number
 %type <comp>                comp_op
+%type <agg>                 agg
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
@@ -171,6 +180,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            help_stmt
 %type <sql_node>            exit_stmt
 %type <sql_node>            command_wrapper
+%type <relation_list>       arg_list
+%type <update_list>         update_list
+%type <relation_list>       id_list
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -266,19 +278,61 @@ desc_table_stmt:
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID RBRACE
+    CREATE INDEX ID ON ID LBRACE ID id_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $3;
       create_index.relation_name = $5;
-      create_index.attribute_name = $7;
+      create_index.is_unique=false;
+      if($8==nullptr){
+      create_index.attribute_name.push_back($7);
+
+      }else{
+      $8->push_back($7);
+       create_index.attribute_name.swap(*$8);
+      }
+      std::reverse(create_index.attribute_name.begin(), create_index.attribute_name.end());
       free($3);
       free($5);
       free($7);
+      free($8);
     }
-    ;
+    |CREATE UNIQUE INDEX ID ON ID LBRACE ID id_list RBRACE
+         {
+           $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
+           CreateIndexSqlNode &create_index = $$->create_index;
+           create_index.index_name = $4;
+           create_index.relation_name = $6;
+           create_index.is_unique=true;
+           if($9==nullptr){
+           create_index.attribute_name.push_back($8);
 
+           }else{
+           $9->push_back($8);
+            create_index.attribute_name.swap(*$9);
+           }
+           std::reverse(create_index.attribute_name.begin(), create_index.attribute_name.end());
+           free($4);
+           free($6);
+           free($8);
+           free($9);
+         }
+    ;
+id_list:
+  {
+  $$=nullptr;
+  }
+  |COMMA ID id_list{
+   if($3!=nullptr){
+   $$=$3;
+   }else{
+   $$=new std::vector<std::string>;
+   }
+   $$->push_back($2);
+   free($2);
+
+  }
 drop_index_stmt:      /*drop index 语句的语法解析树*/
     DROP INDEX ID ON ID
     {
@@ -429,19 +483,73 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-    UPDATE ID SET ID EQ value where 
+    UPDATE ID SET update_list where
     {
       $$ = new ParsedSqlNode(SCF_UPDATE);
       $$->update.relation_name = $2;
-      $$->update.attribute_name = $4;
-      $$->update.value = *$6;
-      if ($7 != nullptr) {
-        $$->update.conditions.swap(*$7);
-        delete $7;
+      $$->update.updateValue_list.swap(*$4);
+
+      if ($5 != nullptr) {
+        $$->update.conditions.swap(*$5);
+        delete $5;
       }
       free($2);
       free($4);
     }
+update_list:
+   {
+   $$=nullptr;
+   }
+   |ID EQ value {
+
+      $$=new std::vector<UpdateValue>;
+
+
+
+      UpdateValue value;
+      value.is_select=false;
+      value.value=*$3;
+      value.attribute_name=$1;
+      $$->push_back(value);
+
+      }
+   |ID EQ value COMMA update_list{
+   if($5==nullptr){
+   $$=new std::vector<UpdateValue>;
+   }else{
+   $$=$5;
+   }
+   UpdateValue value;
+   value.is_select=false;
+   value.value=*$3;
+   value.attribute_name=$1;
+   $$->push_back(value);
+
+   }
+   |ID EQ  LBRACE select_stmt RBRACE {
+
+         $$=new std::vector<UpdateValue>;
+
+         UpdateValue value;
+         value.is_select=true;
+         value.selectSqlNode=$4->selection;
+         value.attribute_name=$1;
+         $$->push_back(value);
+
+      }
+   |ID EQ  LBRACE select_stmt RBRACE COMMA update_list{
+   if($7==nullptr){
+      $$=new std::vector<UpdateValue>;
+      }else{
+      $$=$7;
+      }
+      UpdateValue value;
+      value.is_select=true;
+      value.selectSqlNode=$4->selection;
+      value.attribute_name=$1;
+      $$->push_back(value);
+
+   }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
     SELECT select_attr FROM ID rel_list  where
@@ -526,8 +634,17 @@ select_attr:
       RelAttrSqlNode attr;
       attr.relation_name  = "";
       attr.attribute_name = "*";
+      attr.agg=NO_AGG;
       $$->emplace_back(attr);
     }
+   /* | agg LBRACE arg_list RBRACE{
+         $$ = new std::vector<RelAttrSqlNode>;
+               RelAttrSqlNode attr;
+               attr.relation_name  = "";
+               attr.attribute_name = "*";
+               attr.agg=$1;
+               $$->emplace_back(attr);
+         }*/
     | rel_attr attr_list {
       if ($2 != nullptr) {
         $$ = $2;
@@ -538,19 +655,73 @@ select_attr:
       delete $1;
     }
     ;
+arg_list:
+ /* empty */
+    {
+      $$ = nullptr;
+    }
+    |'*' {
+    $$=new std::vector<std::string>;
+    $$->push_back("*");
 
+    }
+    |'*' COMMA arg_list{
+    if($3!=nullptr){
+    $$=$3;
+    }else{
+    $$=new std::vector<std::string>;
+    }
+
+     $$->push_back("*");
+    }
+    | ID {
+    $$=new std::vector<std::string>;
+    $$->push_back($1);
+    }
+    |ID COMMA arg_list{
+    if($3!=nullptr){
+        $$=$3;
+        }else{
+        $$=new std::vector<std::string>;
+        }
+        $$->push_back($1);
+    }
 rel_attr:
     ID {
       $$ = new RelAttrSqlNode;
       $$->attribute_name = $1;
+      $$->agg=NO_AGG;
+      $$->is_right=true;
       free($1);
     }
+    |agg LBRACE arg_list RBRACE{
+         $$ = new RelAttrSqlNode;
+         if($3==nullptr||$3->size()!=1){
+         $$->is_right=false;
+         }else{
+         $$->attribute_name = (*$3)[0];
+         $$->agg=$1;
+         }
+          free($3);
+
+         }
     | ID DOT ID {
       $$ = new RelAttrSqlNode;
       $$->relation_name  = $1;
       $$->attribute_name = $3;
+      $$->agg=NO_AGG;
+      $$->is_right=true;
       free($1);
       free($3);
+    }
+    | agg LBRACE ID DOT ID RBRACE{
+               $$ = new RelAttrSqlNode;
+               $$->relation_name  = $3;
+               $$->attribute_name = $5;
+               $$->is_right=true;
+               $$->agg=$1;
+               free($3);
+               free($5);
     }
     ;
 
@@ -698,7 +869,12 @@ comp_op:
     | LK {$$ = LIKE;}
     | NOT LK {$$ = NOT_LIKE;}
     ;
-
+agg:
+    MAX_agg{$$=MAX_AGG;}
+    |MIN_agg{$$=MIN_AGG;}
+    |AVG_agg{$$=AVG_AGG;}
+    |COUNT_agg{$$=COUNT_AGG;}
+    |SUM_agg{$$=SUM_AGG;}
 load_data_stmt:
     LOAD DATA INFILE SSS INTO TABLE ID 
     {

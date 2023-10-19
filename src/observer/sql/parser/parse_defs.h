@@ -26,7 +26,14 @@ class Expression;
 /**
  * @defgroup SQLParser SQL Parser 
  */
-
+enum Agg{
+  MAX_AGG,
+  MIN_AGG,
+  AVG_AGG,
+  COUNT_AGG,
+  SUM_AGG,
+  NO_AGG,
+};
 /**
  * @brief 描述一个属性
  * @ingroup SQLParser
@@ -38,6 +45,8 @@ struct RelAttrSqlNode
 {
   std::string relation_name;   ///< relation name (may be NULL) 表名
   std::string attribute_name;  ///< attribute name              属性名
+  Agg agg;
+  bool is_right;
 };
 
 /**
@@ -132,7 +141,12 @@ struct DeleteSqlNode
   std::string                   relation_name;  ///< Relation to delete from
   std::vector<ConditionSqlNode> conditions;
 };
-
+struct UpdateValue{
+  bool is_select;
+  SelectSqlNode selectSqlNode;
+  Value value;
+  std::string attribute_name;
+};
 /**
  * @brief 描述一个update语句
  * @ingroup SQLParser
@@ -140,8 +154,7 @@ struct DeleteSqlNode
 struct UpdateSqlNode
 {
   std::string                   relation_name;         ///< Relation to update
-  std::string                   attribute_name;        ///< 更新的字段，仅支持一个字段
-  Value                         value;                 ///< 更新的值，仅支持一个字段
+  std::vector<UpdateValue> updateValue_list;          ///< 更新的值，仅支持一个字段
   std::vector<ConditionSqlNode> conditions;
 };
 
@@ -189,7 +202,8 @@ struct CreateIndexSqlNode
 {
   std::string index_name;      ///< Index name
   std::string relation_name;   ///< Relation name
-  std::string attribute_name;  ///< Attribute name
+  std::vector<std::string> attribute_name;  ///< Attribute name
+  bool is_unique;
 };
 
 /**

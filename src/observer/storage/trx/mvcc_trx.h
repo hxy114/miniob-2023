@@ -67,7 +67,7 @@ public:
   virtual ~MvccTrx();
 
   RC insert_record(Table *table, Record &record) override;
-  RC update_record(Table *table, Record &record, const FieldMeta *field_meta, Value value) override;
+  RC update_record(Table *table, Record &record, std::vector<const FieldMeta *>field_meta, std::vector<Value> value) override;
   RC delete_record(Table *table, Record &record) override;
 
   /**
