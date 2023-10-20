@@ -45,8 +45,8 @@ RC UpdatePhysicalOperator::open(Trx *trx)
             value.set_string(s.c_str());
           }else if(value_type==NULLS) {
             if(!field_meta_[select_map_[i]]->is_null()) {
-              LOG_WARN("field type mismatch. ");
-              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+              is_fail_=true;
+              break;
             }
             value.set_null();
           }else{
@@ -68,13 +68,12 @@ RC UpdatePhysicalOperator::open(Trx *trx)
 
           }else if(value_type==NULLS) {
             if(!field_meta_[select_map_[i]]->is_null()) {
-              LOG_WARN("field type mismatch. ");
-              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+              is_fail_=true;
+              break;
             }
             value.set_null();
           }else{
-            LOG_WARN("field type mismatch."
-              );
+            LOG_WARN("field type mismatch.");
             return RC::SCHEMA_FIELD_TYPE_MISMATCH;
           }
         }else if(field_type==FLOATS){
@@ -88,8 +87,8 @@ RC UpdatePhysicalOperator::open(Trx *trx)
             value.set_float(d);
           }else if(value_type==NULLS) {
             if(!field_meta_[select_map_[i]]->is_null()) {
-              LOG_WARN("field type mismatch. ");
-              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+              is_fail_=true;
+              break;
             }
             value.set_null();
           }else{
@@ -99,8 +98,8 @@ RC UpdatePhysicalOperator::open(Trx *trx)
         }else if(field_type==DATES){
           if(value_type==NULLS){
             if(!field_meta_[select_map_[i]]->is_null()){
-              LOG_WARN("field type mismatch.");
-              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+              is_fail_=true;
+              break;
             }
             value.set_null();
           }else{
@@ -138,7 +137,7 @@ RC UpdatePhysicalOperator::next()
 
   PhysicalOperator *child = children_[0].get();
   while (RC::SUCCESS == (rc = child->next())) {
-    if(is_muil_row_){
+    if(is_muil_row_||is_fail_){
       return RC::INTERNAL;
     }
     Tuple *tuple = child->current_tuple();
