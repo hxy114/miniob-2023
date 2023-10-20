@@ -145,7 +145,7 @@ const FieldMeta *TableMeta::find_field_by_offset(int offset) const
 }
 int TableMeta::find_field_index_by_name(const char *name)const{
   for (int i=0;i<fields_.size();i++) {
-    if (fields_[i].name() == name) {
+    if (strcmp(fields_[i].name() , name)==0) {
       return i;
     }
   }

@@ -41,6 +41,12 @@ RC InsertPhysicalOperator::open(Trx *trx)
     for (int i = 0; i < indexMeta.size(); i++) {
       if (indexMeta[i].is_unique()) {
         Index *index  = table_->find_index(indexMeta[i].name());
+        int null_bitmap_len = align8(field_num) / 8;
+        int null_bitmap_start=table_->table_meta().field(table_->table_meta().sys_field_num())->offset()-null_bitmap_len;
+        common::Bitmap null_bitmap(record.data()+null_bitmap_start,null_bitmap_len);
+        if(null_bitmap.get_bit(table_->table_meta().find_field_index_by_name(index->field_meta()[0].name())-table_->table_meta().sys_field_num())){
+          continue;
+        }
         auto   offset = index->field_meta()[0].offset();
         auto   key    = record.data() + offset;
         auto   scan   = index->create_scanner(key, offset, true, key, offset, true);

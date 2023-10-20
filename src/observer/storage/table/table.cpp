@@ -495,11 +495,17 @@ RC Table::update_record(Record &record, std::vector<const FieldMeta*> field_meta
       memcpy(newRecord.data() + field_meta[i]->offset(), value[i].data(), copy_len);
     }
   }
-
+  const int field_num=table_meta().field_num()-table_meta().sys_field_num();
   std::vector<IndexMeta>indexMeta=get_all_index_meta();
   for(int i=0;i<indexMeta.size();i++){
     if(indexMeta[i].is_unique()){
       Index* index=find_index(indexMeta[i].name());
+      int null_bitmap_len = align8(field_num) / 8;
+      int null_bitmap_start=table_meta().field(table_meta().sys_field_num())->offset()-null_bitmap_len;
+      common::Bitmap null_bitmap(record.data()+null_bitmap_start,null_bitmap_len);
+      if(null_bitmap.get_bit(table_meta().find_field_index_by_name(index->field_meta()[0].name())-table_meta().sys_field_num())){
+        continue;
+      }
       auto offset=index->field_meta()[0].offset();
       auto key=newRecord.data()+offset;
       auto scan=index->create_scanner(key,offset,true,key,offset,true);
@@ -557,10 +563,17 @@ RC Table::update_record(Record &record, std::vector<const FieldMeta*> field_meta
   return RC::SUCCESS;
 }
 
-RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
+RC Table::insert_entry_of_indexes( char *record, const RID &rid)
 {
+  const int field_num=table_meta().field_num()-table_meta().sys_field_num();
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
+    int null_bitmap_len = align8(field_num) / 8;
+    int null_bitmap_start=table_meta().field(table_meta().sys_field_num())->offset()-null_bitmap_len;
+    common::Bitmap null_bitmap(record+null_bitmap_start,null_bitmap_len);
+    if(null_bitmap.get_bit(table_meta().find_field_index_by_name(index->field_meta()[0].name())-table_meta().sys_field_num())){
+      continue;
+    }
     rc = index->insert_entry(record, &rid);
     if (rc != RC::SUCCESS) {
       break;
@@ -569,10 +582,17 @@ RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
   return rc;
 }
 
-RC Table::delete_entry_of_indexes(const char *record, const RID &rid, bool error_on_not_exists)
+RC Table::delete_entry_of_indexes( char *record, const RID &rid, bool error_on_not_exists)
 {
+  const int field_num=table_meta().field_num()-table_meta().sys_field_num();
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
+    int null_bitmap_len = align8(field_num) / 8;
+    int null_bitmap_start=table_meta().field(table_meta().sys_field_num())->offset()-null_bitmap_len;
+    common::Bitmap null_bitmap(record+null_bitmap_start,null_bitmap_len);
+    if(null_bitmap.get_bit(table_meta().find_field_index_by_name(index->field_meta()[0].name())-table_meta().sys_field_num())){
+      continue;
+    }
     rc = index->delete_entry(record, &rid);
     if (rc != RC::SUCCESS) {
       if (rc != RC::RECORD_INVALID_KEY || !error_on_not_exists) {
