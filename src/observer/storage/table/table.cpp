@@ -503,7 +503,15 @@ RC Table::update_record(Record &record, std::vector<const FieldMeta*> field_meta
       int null_bitmap_len = align8(field_num) / 8;
       int null_bitmap_start=table_meta().field(table_meta().sys_field_num())->offset()-null_bitmap_len;
       common::Bitmap null_bitmap(record.data()+null_bitmap_start,null_bitmap_len);
-      if(null_bitmap.get_bit(table_meta().find_field_index_by_name(index->field_meta()[0].name())-table_meta().sys_field_num())){
+      bool is_null=false;
+      for(int x=0;x<index->field_meta().size();x++){
+        if(null_bitmap.get_bit(table_meta().find_field_index_by_name(index->field_meta()[x].name())-table_meta().sys_field_num())){
+          is_null=true;
+          break;
+        }
+      }
+
+      if(is_null){
         continue;
       }
       auto offset=index->field_meta()[0].offset();
@@ -571,7 +579,15 @@ RC Table::insert_entry_of_indexes( char *record, const RID &rid)
     int null_bitmap_len = align8(field_num) / 8;
     int null_bitmap_start=table_meta().field(table_meta().sys_field_num())->offset()-null_bitmap_len;
     common::Bitmap null_bitmap(record+null_bitmap_start,null_bitmap_len);
-    if(null_bitmap.get_bit(table_meta().find_field_index_by_name(index->field_meta()[0].name())-table_meta().sys_field_num())){
+    bool is_null=false;
+    for(int x=0;x<index->field_meta().size();x++){
+      if(null_bitmap.get_bit(table_meta().find_field_index_by_name(index->field_meta()[x].name())-table_meta().sys_field_num())){
+        is_null=true;
+        break;
+      }
+    }
+
+    if(is_null){
       continue;
     }
     rc = index->insert_entry(record, &rid);
@@ -590,7 +606,15 @@ RC Table::delete_entry_of_indexes( char *record, const RID &rid, bool error_on_n
     int null_bitmap_len = align8(field_num) / 8;
     int null_bitmap_start=table_meta().field(table_meta().sys_field_num())->offset()-null_bitmap_len;
     common::Bitmap null_bitmap(record+null_bitmap_start,null_bitmap_len);
-    if(null_bitmap.get_bit(table_meta().find_field_index_by_name(index->field_meta()[0].name())-table_meta().sys_field_num())){
+    bool is_null=false;
+    for(int x=0;x<index->field_meta().size();x++){
+      if(null_bitmap.get_bit(table_meta().find_field_index_by_name(index->field_meta()[x].name())-table_meta().sys_field_num())){
+        is_null=true;
+        break;
+      }
+    }
+
+    if(is_null){
       continue;
     }
     rc = index->delete_entry(record, &rid);
