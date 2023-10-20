@@ -483,7 +483,7 @@ RC Table::update_record(Record &record, std::vector<const FieldMeta*> field_meta
   for(int i=0;i<field_meta.size();i++){
     size_t copy_len = field_meta[i]->len();
     if(value[i].attr_type()==NULLS){
-      null_bitmap.set_bit(table_meta_.find_field_index_by_name(field_meta[i]->name()-table_meta_.sys_field_num()));
+      null_bitmap.set_bit(table_meta_.find_field_index_by_name(field_meta[i]->name())-table_meta_.sys_field_num());
     }else {
       if (field_meta[i]->type() == CHARS) {
         const size_t data_len = strlen((const char *)value[i].data());
