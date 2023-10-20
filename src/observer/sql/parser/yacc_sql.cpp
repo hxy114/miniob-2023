@@ -2070,7 +2070,7 @@ yyreduce:
       if ((yyvsp[0].value_list) != nullptr) {
         (yyval.sql_node)->insertion.values.swap(*(yyvsp[0].value_list));
       }
-      (yyval.sql_node)->insertion.values.insert((yyval.sql_node)->insertion.values.begin(),(yyvsp[-1].value_list)->begin(),(yyvsp[-1].value_list)->end());
+      (yyval.sql_node)->insertion.values.insert((yyval.sql_node)->insertion.values.end(),(yyvsp[-1].value_list)->begin(),(yyvsp[-1].value_list)->end());
       std::reverse((yyval.sql_node)->insertion.values.begin(), (yyval.sql_node)->insertion.values.end());
       delete (yyvsp[-1].value_list);
       free((yyvsp[-3].string));

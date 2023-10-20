@@ -441,7 +441,7 @@ insert_stmt:        /*insert   语句的语法解析树*/
       if ($6 != nullptr) {
         $$->insertion.values.swap(*$6);
       }
-      $$->insertion.values.insert($$->insertion.values.begin(),$5->begin(),$5->end());
+      $$->insertion.values.insert($$->insertion.values.end(),$5->begin(),$5->end());
       std::reverse($$->insertion.values.begin(), $$->insertion.values.end());
       delete $5;
       free($3);
