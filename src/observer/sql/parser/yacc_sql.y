@@ -110,6 +110,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
          UNIQUE
          NULLABLE
          IS
+         ORDER
+         BY
+         ASC
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -133,6 +136,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   enum Agg                          agg;
   std::vector<UpdateValue>*         update_list;
   bool                              is_null;
+  std::vector<OrderBySqlNode> *      order_by;
 }
 
 %token <number> NUMBER
@@ -189,6 +193,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <is_null>             nullable
 %type <value_list>       insert_value
 %type <value_list>       insert_values
+%type <order_by>         order
+%type <order_by>         order_by_list
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -468,7 +474,7 @@ insert_values:
               } else {
                 $$ = new std::vector<Value>;
               }
-              $$->insert($$->begin(),$2->begin(),$2->end());
+              $$->insert($$->end(),$2->begin(),$2->end());
               delete $2;
     }
 value_list:
@@ -598,7 +604,7 @@ update_list:
    }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list  where
+    SELECT select_attr FROM ID rel_list  where order
          {
            $$ = new ParsedSqlNode(SCF_SELECT);
            if ($2 != nullptr) {
@@ -617,10 +623,81 @@ select_stmt:        /*  select 语句的语法解析树*/
              $$->selection.conditions.insert($$->selection.conditions.begin(),$6->begin(),$6->end());
              delete $6;
            }
+           if($7!=nullptr){
+           $$->selection.order_by.insert($$->selection.order_by.begin(),$7->begin(),$7->end());
+           std::reverse($$->selection.order_by.begin(), $$->selection.order_by.end());
+                        delete $7;
+           }
            free($4);
          }
 
     ;
+order:
+  {
+  $$=nullptr;
+  }
+  |ORDER BY rel_attr ASC order_by_list{
+  if($5!=nullptr){
+  $$=$5;
+  }else{
+  $$=new std::vector<OrderBySqlNode>;
+  }
+  OrderBySqlNode orderBySqlNode;
+      orderBySqlNode.attrs=*$3;
+      orderBySqlNode.orderBySequence=ASC_ORDER_BY;
+      $$->push_back(orderBySqlNode);
+   std::reverse($$->begin(),$$->end());
+  }
+  |ORDER BY rel_attr  order_by_list{
+    if($4!=nullptr){
+    $$=$4;
+    }else{
+    $$=new std::vector<OrderBySqlNode>;
+    }
+    OrderBySqlNode orderBySqlNode;
+    orderBySqlNode.attrs=*$3;
+    orderBySqlNode.orderBySequence=ASC_ORDER_BY;
+    $$->push_back(orderBySqlNode);
+     std::reverse($$->begin(),$$->end());
+    }
+  |ORDER BY rel_attr DESC order_by_list{
+  if($5!=nullptr){
+    $$=$5;
+    }else{
+    $$=new std::vector<OrderBySqlNode>;
+    }
+    $$->push_back({*$3,DESC_ORDER_BY});
+     std::reverse($$->begin(),$$->end());
+
+  };
+order_by_list:
+   {$$=nullptr;
+   }
+   |COMMA rel_attr ASC order_by_list{
+   if($4!=nullptr){
+     $$=$4;
+     }else{
+     $$=new std::vector<OrderBySqlNode>;
+     }
+     $$->push_back({*$2,ASC_ORDER_BY});
+   }
+   |COMMA rel_attr  order_by_list{
+   if($3!=nullptr){
+        $$=$3;
+        }else{
+        $$=new std::vector<OrderBySqlNode>;
+        }
+        $$->push_back({*$2,ASC_ORDER_BY});
+
+   }|COMMA rel_attr DESC order_by_list{
+       if($4!=nullptr){
+            $$=$4;
+            }else{
+            $$=new std::vector<OrderBySqlNode>;
+            }
+            $$->push_back({*$2,DESC_ORDER_BY});
+    }
+
 calc_stmt:
     CALC expression_list
     {

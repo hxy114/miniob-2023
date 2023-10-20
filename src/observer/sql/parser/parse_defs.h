@@ -68,7 +68,10 @@ enum CompOp
   NO_OP,
 
 };
-
+enum OrderBySequence{
+  ASC_ORDER_BY,
+  DESC_ORDER_BY,
+};
 /**
  * @brief 表示一个条件比较
  * @ingroup SQLParser
@@ -89,7 +92,10 @@ struct ConditionSqlNode
   RelAttrSqlNode  right_attr;      ///< right-hand side attribute if right_is_attr = TRUE 右边的属性
   Value           right_value;     ///< right-hand side value if right_is_attr = FALSE
 };
-
+struct OrderBySqlNode{
+  RelAttrSqlNode attrs;
+  OrderBySequence orderBySequence=ASC_ORDER_BY;
+};
 /**
  * @brief 描述一个select语句
  * @ingroup SQLParser
@@ -106,6 +112,7 @@ struct SelectSqlNode
   std::vector<RelAttrSqlNode>     attributes;    ///< attributes in select clause
   std::vector<std::string>        relations;     ///< 查询的表
   std::vector<ConditionSqlNode>   conditions;    ///< 查询条件，使用AND串联起来多个条件
+  std::vector<OrderBySqlNode>     order_by;
 };
 struct InnerJoinSqlNode
 {

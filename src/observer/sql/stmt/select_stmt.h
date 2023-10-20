@@ -57,6 +57,12 @@ public:
   {
     return attributes_;
   }
+  const std::vector<Field> &order_by_fields()const{
+    return order_by_fields_;
+  }
+  const std::vector<OrderBySequence> &order_by_sequences()const{
+    return  order_by_sequences_;
+  }
   bool is_agg(){
     return is_agg_;
   }
@@ -71,4 +77,6 @@ private:
   FilterStmt *filter_stmt_ = nullptr;
   bool is_agg_;
   std::vector<RelAttrSqlNode> attributes_;
+  std::vector<Field>order_by_fields_;
+  std::vector<OrderBySequence>order_by_sequences_;
 };

@@ -25,6 +25,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/join_logical_operator.h"
 #include "sql/operator/explain_logical_operator.h"
 #include "sql/operator/agg_logical_operator.h"
+#include "sql/operator/order_logical_operator.h"
 
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/calc_stmt.h"
@@ -113,7 +114,6 @@ RC LogicalPlanGenerator::create_plan(
   }
 
 
-
   unique_ptr<LogicalOperator> predicate_oper;
   RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
   if (rc != RC::SUCCESS) {
@@ -137,19 +137,42 @@ RC LogicalPlanGenerator::create_plan(
     logical_operator.swap(agg_oper);
     return RC::SUCCESS;
   }else{
-    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields));
-    if (predicate_oper) {
-      if (table_oper) {
-        predicate_oper->add_child(std::move(table_oper));
-      }
-      project_oper->add_child(std::move(predicate_oper));
-    } else {
-      if (table_oper) {
-        project_oper->add_child(std::move(table_oper));
-      }
+    unique_ptr<LogicalOperator> order_oper(nullptr);
+    if(select_stmt->order_by_fields().size()>0){
+      unique_ptr<LogicalOperator> order_oper_tmp(new OrderLogicalOperator(select_stmt->order_by_fields(),select_stmt->order_by_sequences(),all_fields));
+      order_oper= std::move(order_oper_tmp);
     }
 
-    logical_operator.swap(project_oper);
+    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields));
+    if(order_oper){
+      if (predicate_oper) {
+        if (table_oper) {
+          predicate_oper->add_child(std::move(table_oper));
+        }
+        project_oper->add_child(std::move(predicate_oper));
+      } else {
+        if (table_oper) {
+          project_oper->add_child(std::move(table_oper));
+        }
+      }
+      order_oper->add_child(std::move(project_oper));
+      logical_operator.swap(order_oper);
+    }else{
+      if (predicate_oper) {
+        if (table_oper) {
+          predicate_oper->add_child(std::move(table_oper));
+        }
+        project_oper->add_child(std::move(predicate_oper));
+      } else {
+        if (table_oper) {
+          project_oper->add_child(std::move(table_oper));
+        }
+      }
+      logical_operator.swap(project_oper);
+    }
+
+
+
     return RC::SUCCESS;
 
   }
