@@ -76,6 +76,14 @@ public:
   {
     return filter_stmt_;
   }
+  std::unordered_map<std::string, std::string> alias_map()
+  {
+    return alias_map_;
+  }
+  std::unordered_map<std::string, std::string> col_alias_map()
+  {
+    return col_alias_map_;
+  }
 
 private:
   std::vector<Field> query_fields_;
@@ -87,4 +95,7 @@ private:
   std::vector<OrderBySequence>order_by_sequences_;
   bool is_sub_select_;
   std::unordered_map<std::string, Table *>top_tables_;
+
+  std::unordered_map<std::string, std::string> alias_map_;  //
+  std::unordered_map<std::string, std::string> col_alias_map_;
 };

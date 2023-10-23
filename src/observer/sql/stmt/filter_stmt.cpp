@@ -27,7 +27,7 @@ FilterStmt::~FilterStmt()
   filter_units_.clear();
 }
 
-RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+RC FilterStmt::create(Db *db, Table *default_table,std::string default_table_alas, std::unordered_map<std::string, Table *> *tables,
     const ConditionSqlNode *conditions, int condition_num, std::unordered_map<std::string, Table *>top_tables,FilterStmt *&stmt)
 {
   RC rc = RC::SUCCESS;
@@ -36,7 +36,7 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
   FilterStmt *tmp_stmt = new FilterStmt();
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
-    rc = create_filter_unit(db, default_table, tables, conditions[i],top_tables, filter_unit);
+    rc = create_filter_unit(db, default_table, default_table_alas,tables, conditions[i],top_tables, filter_unit);
     if (rc != RC::SUCCESS) {
       delete tmp_stmt;
       LOG_WARN("failed to create filter unit. condition index=%d", i);
@@ -92,7 +92,7 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
   return RC::SUCCESS;
 }
 
-RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::string default_table_alas,std::unordered_map<std::string, Table *> *tables,
     const ConditionSqlNode &condition, std::unordered_map<std::string, Table *>top_tables,FilterUnit *&filter_unit)
 {
   RC rc = RC::SUCCESS;
@@ -116,6 +116,9 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     }
     Stmt *stmt;
     top_tables.insert({default_table->name(),default_table});
+    if(!default_table_alas.empty()){
+      top_tables.insert({default_table_alas,default_table});
+    }
     rc = SelectStmt::create(db, *condition.right_select, stmt,condition.right_select->is_sub_select,top_tables);
     if (rc != RC::SUCCESS) {
       LOG_WARN("invalid ");
@@ -153,6 +156,9 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       }
       Stmt *stmt;
       top_tables.insert({default_table->name(),default_table});
+      if(!default_table_alas.empty()){
+        top_tables.insert({default_table_alas,default_table});
+      }
       rc = SelectStmt::create(db, *condition.left_select, stmt,condition.left_select->is_sub_select,top_tables);
       if (rc != RC::SUCCESS) {
         LOG_WARN("invalid ");
@@ -197,6 +203,9 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       }
       Stmt *stmt;
       top_tables.insert({default_table->name(),default_table});
+      if(!default_table_alas.empty()){
+        top_tables.insert({default_table_alas,default_table});
+      }
       rc = SelectStmt::create(db, *condition.right_select, stmt,condition.right_select->is_sub_select,top_tables);
       if (rc != RC::SUCCESS) {
         LOG_WARN("invalid ");

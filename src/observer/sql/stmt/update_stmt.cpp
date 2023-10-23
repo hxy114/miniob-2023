@@ -177,6 +177,7 @@ RC UpdateStmt::create(Db *db,  UpdateSqlNode &update, Stmt *&stmt)
 
   RC rc = FilterStmt::create(db,
       table,
+      std::string(),
       &table_map,
       update.conditions.data(),
       static_cast<int>(update.conditions.size()),

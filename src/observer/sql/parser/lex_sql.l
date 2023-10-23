@@ -133,6 +133,7 @@ asc                                     RETURN_TOKEN(ASC);
 in                                      RETURN_TOKEN(IN);
 exists                                  RETURN_TOKEN(EXISTS);
 or                                      RETURN_TOKEN(OR);
+as                                      RETURN_TOKEN(AS);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     RETURN_TOKEN(RBRACE);

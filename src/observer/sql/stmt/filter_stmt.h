@@ -114,10 +114,10 @@ public:
   }
 
 public:
-  static RC create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+  static RC create(Db *db, Table *default_table, std::string default_table_alas,std::unordered_map<std::string, Table *> *tables,
       const ConditionSqlNode *conditions, int condition_num, std::unordered_map<std::string, Table *>top_tables,FilterStmt *&stmt);
 
-  static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
+  static RC create_filter_unit(Db *db, Table *default_table, std::string default_table_alas,std::unordered_map<std::string, Table *> *tables,
       const ConditionSqlNode &condition, std::unordered_map<std::string, Table *>top_tables,FilterUnit *&filter_unit);
 
 private:

@@ -116,6 +116,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
          IN
          EXISTS
          OR
+         AS
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -198,6 +199,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <value_list>       insert_values
 %type <order_by>         order
 %type <order_by>         order_by_list
+%type <string>              as
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -607,30 +609,34 @@ update_list:
    }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list  where order
+    SELECT select_attr FROM ID as rel_list  where order
          {
            $$ = new ParsedSqlNode(SCF_SELECT);
            if ($2 != nullptr) {
              $$->selection.attributes.swap(*$2);
              delete $2;
            }
-           if ($5 != nullptr) {
-             $$->selection.relations.swap($5->relations);
-             $$->selection.conditions.swap($5->conditions);
-             delete $5;
+           if ($6 != nullptr) {
+             $$->selection.relations.swap($6->relations);
+             $$->selection.conditions.swap($6->conditions);
+             $$->selection.alias_map.insert($6->alias_map.begin(), $6->alias_map.end());
+             delete $6;
            }
            $$->selection.relations.push_back($4);
            std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
+           if ($5 != nullptr) {
+                     $$->selection.alias_map.insert(std::pair<std::string, std::string>($5, $4));
+            }
 
-           if ($6 != nullptr) {
-             $$->selection.conditions.insert($$->selection.conditions.begin(),$6->begin(),$6->end());
+           if ($7 != nullptr) {
+             $$->selection.conditions.insert($$->selection.conditions.begin(),$7->begin(),$7->end());
              std::reverse($$->selection.conditions.begin(), $$->selection.conditions.end());
-             delete $6;
+             delete $7;
            }
-           if($7!=nullptr){
-           $$->selection.order_by.insert($$->selection.order_by.begin(),$7->begin(),$7->end());
+           if($8!=nullptr){
+           $$->selection.order_by.insert($$->selection.order_by.begin(),$8->begin(),$8->end());
            std::reverse($$->selection.order_by.begin(), $$->selection.order_by.end());
-                        delete $7;
+                        delete $8;
            }
            $$->selection.is_sub_select=false;
            free($4);
@@ -815,14 +821,18 @@ arg_list:
         $$->push_back($1);
     }
 rel_attr:
-    ID {
+    ID as{
       $$ = new RelAttrSqlNode;
       $$->attribute_name = $1;
       $$->agg=NO_AGG;
       $$->is_right=true;
+      if($2!=nullptr){
+      $$->alias_name=$2;
+      }
+
       free($1);
     }
-    |agg LBRACE arg_list RBRACE{
+    |agg LBRACE arg_list RBRACE as{
          $$ = new RelAttrSqlNode;
          if($3==nullptr||$3->size()!=1){
          $$->is_right=false;
@@ -830,24 +840,33 @@ rel_attr:
          $$->attribute_name = (*$3)[0];
          $$->agg=$1;
          }
+         if($5!=nullptr){
+          $$->alias_name=$5;
+         }
           free($3);
 
          }
-    | ID DOT ID {
+    | ID DOT ID as{
       $$ = new RelAttrSqlNode;
       $$->relation_name  = $1;
       $$->attribute_name = $3;
       $$->agg=NO_AGG;
       $$->is_right=true;
+      if($4!=nullptr){
+      $$->alias_name=$4;
+      }
       free($1);
       free($3);
     }
-    | agg LBRACE ID DOT ID RBRACE{
+    | agg LBRACE ID DOT ID RBRACE as{
                $$ = new RelAttrSqlNode;
                $$->relation_name  = $3;
                $$->attribute_name = $5;
                $$->is_right=true;
                $$->agg=$1;
+               if($7!=nullptr){
+                     $$->alias_name=$7;
+                     }
                free($3);
                free($5);
     }
@@ -875,27 +894,33 @@ rel_list:
     {
       $$ = nullptr;
     }
-    | COMMA ID rel_list {
-      if ($3 != nullptr) {
-        $$ = $3;
+    | COMMA ID as rel_list {
+      if ($4 != nullptr) {
+        $$ = $4;
       } else {
         $$ = new InnerJoinSqlNode;
+      }
+      if($3!=nullptr){
+      $$->alias_map[$3]=$2;
       }
 
       $$->relations.push_back($2);
       free($2);
     }
-    |INNER JOIN ID on rel_list {
-           if ($5 != nullptr) {
-             $$ = $5;
+    |INNER JOIN ID as on rel_list {
+           if ($6 != nullptr) {
+             $$ = $6;
            } else {
              $$ = new InnerJoinSqlNode;
            }
 
            $$->relations.push_back($3);
-           if($4!=nullptr){
-           $$->conditions.insert($$->conditions.end(),$4->begin(),$4->end());
+           if($5!=nullptr){
+           $$->conditions.insert($$->conditions.end(),$5->begin(),$5->end());
            }
+           if($4!=nullptr){
+                 $$->alias_map[$4]=$3;
+                 }
 
            free($3);
          }
@@ -1128,6 +1153,18 @@ agg:
     |AVG_agg{$$=AVG_AGG;}
     |COUNT_agg{$$=COUNT_AGG;}
     |SUM_agg{$$=SUM_AGG;}
+as:
+  /* empty */
+  {
+    $$ = nullptr;
+  }
+  | AS ID {
+    $$ = $2;
+  }
+  | ID {
+    $$ = $1;
+  }
+  ;
 load_data_stmt:
     LOAD DATA INFILE SSS INTO TABLE ID 
     {

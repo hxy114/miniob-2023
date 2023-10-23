@@ -75,6 +75,27 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
       }
     }
   }
+
+  // 将别名也添加到table_map中去，为了Filter中查找&
+  std::string default_table_alas;
+  std::unordered_map<std::string, std::string> alias_map(select_sql.alias_map);
+  for (auto it = alias_map.begin(); it != alias_map.end(); it++) {
+    if (table_map.find(it->second) != table_map.end()) {
+      table_map.insert(std::pair<std::string, Table *>(it->first, table_map[it->second]));
+      if(it->second==select_sql.relations[0]){
+        default_table_alas=it->first;
+      }
+    }
+  }
+
+  // 为列的别名生成别名映射关系
+  std::unordered_map<std::string, std::string> col_alias_map;
+  for (auto &attribute : select_sql.attributes) {
+    if (!attribute.alias_name.empty()) {
+      col_alias_map.insert(std::pair<std::string, std::string>(attribute.attribute_name, attribute.alias_name));
+    }
+  }
+
   if(is_agg){
     if(agg_num!=static_cast<int>(select_sql.attributes.size())){
       LOG_WARN("invalid argument. agg_num  wrong. ");
@@ -151,7 +172,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
     // create filter statement in `where` statement
     FilterStmt *filter_stmt = nullptr;
     RC rc = FilterStmt::create(db,
-        default_table,
+        default_table,default_table_alas,
         &table_map,
         select_sql.conditions.data(),
         static_cast<int>(select_sql.conditions.size()),
@@ -172,6 +193,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
     select_stmt->is_agg_= true;
     select_stmt->top_tables_=top_tables;
     select_stmt->is_sub_select_=is_sub_select;
+    select_stmt->alias_map_.swap(alias_map);
+    select_stmt->col_alias_map_.swap(col_alias_map);
     stmt = select_stmt;
     return RC::SUCCESS;
 
@@ -305,6 +328,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
     FilterStmt *filter_stmt = nullptr;
     RC rc = FilterStmt::create(db,
         default_table,
+        default_table_alas,
         &table_map,
         select_sql.conditions.data(),
         static_cast<int>(select_sql.conditions.size()),
@@ -319,6 +343,9 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
     SelectStmt *select_stmt = new SelectStmt();
     // TODO add expression copy
     select_stmt->tables_.swap(tables);
+    auto attributes(select_sql.attributes);
+    std::reverse(attributes.begin(),attributes.end());
+    select_stmt->attributes_.swap(attributes);
     select_stmt->query_fields_.swap(query_fields);
     select_stmt->filter_stmt_ = filter_stmt;
     select_stmt->is_agg_= false;
@@ -326,6 +353,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
     select_stmt->order_by_fields_.swap(order_by_fields);
     select_stmt->top_tables_=top_tables;
     select_stmt->is_sub_select_=is_sub_select;
+    select_stmt->alias_map_.swap(alias_map);
+    select_stmt->col_alias_map_.swap(col_alias_map);
     stmt = select_stmt;
     return RC::SUCCESS;
 

@@ -206,8 +206,10 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
 
   ProjectPhysicalOperator *project_operator = new ProjectPhysicalOperator;
   const vector<Field> &project_fields = project_oper.fields();
+  const std::unordered_map<std::string, std::string> &col_alias_map = project_oper.col_alias_map();
+  const std::unordered_map<std::string, std::string> &alias_map = project_oper.alias_map();
   for (const Field &field : project_fields) {
-    project_operator->add_projection(field.table(), field.meta());
+    project_operator->add_projection(field.table(), field.meta(), col_alias_map, alias_map);
   }
 
   if (child_phy_oper) {

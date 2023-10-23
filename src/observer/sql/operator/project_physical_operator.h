@@ -32,7 +32,7 @@ public:
   {
     
   }
-  void add_projection(const Table *table, const FieldMeta *field);
+  void add_projection(const Table *table, const FieldMeta *field, const std::unordered_map<std::string, std::string> &col_alias_map, const std::unordered_map<std::string, std::string> &alias_map);
 
   PhysicalOperatorType type() const override
   {

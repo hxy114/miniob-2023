@@ -29,7 +29,7 @@ See the Mulan PSL v2 for more details. */
 class ProjectLogicalOperator : public LogicalOperator 
 {
 public:
-  ProjectLogicalOperator(const std::vector<Field> &fields);
+  ProjectLogicalOperator(const std::vector<Field> &fields, std::unordered_map<std::string, std::string> &col_alias_map, std::unordered_map<std::string, std::string> &alias_map);
   virtual ~ProjectLogicalOperator() = default;
 
   LogicalOperatorType type() const override
@@ -49,6 +49,14 @@ public:
   {
     return fields_;
   }
+  const std::unordered_map<std::string, std::string> &col_alias_map() const
+  {
+    return col_alias_map_;
+  }
+  const std::unordered_map<std::string, std::string> &alias_map() const
+  {
+    return alias_map_;
+  }
 
 private:
   //! 投影映射的字段名称
@@ -56,4 +64,6 @@ private:
   //! 或者是执行某个函数。所以这里应该是表达式Expression。
   //! 不过现在简单处理，就使用字段来描述
   std::vector<Field> fields_;
+  std::unordered_map<std::string, std::string> col_alias_map_;
+  std::unordered_map<std::string, std::string> alias_map_;
 };
