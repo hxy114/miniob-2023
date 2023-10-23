@@ -113,6 +113,11 @@ RC UpdatePhysicalOperator::open(Trx *trx)
         }
       }
       values_[select_map_[i]].set_value(value);
+    }else{
+      if(!field_meta_[select_map_[i]]->is_null()){
+        is_fail_=true;
+        break;
+      }
     }
     if(children_[i]->next()==RC::SUCCESS){
       is_muil_row_=true;
