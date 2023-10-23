@@ -185,25 +185,49 @@ RC LogicalPlanGenerator::create_plan(
   std::vector<unique_ptr<Expression>> cmp_exprs;
   const std::vector<FilterUnit *> &filter_units = filter_stmt->filter_units();
   for (const FilterUnit *filter_unit : filter_units) {
-    const FilterObj &filter_obj_left = filter_unit->left();
-    const FilterObj &filter_obj_right = filter_unit->right();
+    if(filter_unit->comp()==EXISTS_OP||filter_unit->comp()==NOT_EXISTS_OP){
+      const FilterObj &filter_obj_right = filter_unit->right();
+      unique_ptr<Expression> right(static_cast<Expression *>(new SubSelectExpr(filter_obj_right.select)));
+      ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), nullptr, std::move(right));
+      cmp_exprs.emplace_back(cmp_expr);
+    }
+    else{
+      const FilterObj &filter_obj_left = filter_unit->left();
+      const FilterObj &filter_obj_right = filter_unit->right();
+      unique_ptr<Expression> left,right;
+      if(filter_obj_left.filter_type_==VALUE_TYPE){
+       left= std::unique_ptr<Expression >(static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
+      }else if(filter_obj_left.filter_type_==ATTR_TYPE){
+       left=std::unique_ptr<Expression >(static_cast<Expression *>(new FieldExpr(filter_obj_left.field)));
+      }else if(filter_obj_left.filter_type_==SUB_SELECT_TYPE){
+       left=std::unique_ptr<Expression >(static_cast<Expression *>(new SubSelectExpr(filter_obj_left.select)));
+      }
 
-    unique_ptr<Expression> left(filter_obj_left.is_attr
-                                         ? static_cast<Expression *>(new FieldExpr(filter_obj_left.field))
-                                         : static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
+      if(filter_obj_right.filter_type_==VALUE_TYPE){
+       right=std::unique_ptr<Expression >(static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
+      }else if(filter_obj_right.filter_type_==ATTR_TYPE){
+       right=std::unique_ptr<Expression >(static_cast<Expression *>(new FieldExpr(filter_obj_right.field)));
+      }else if(filter_obj_right.filter_type_==SUB_SELECT_TYPE){
+       right=std::unique_ptr<Expression >(static_cast<Expression *>(new SubSelectExpr(filter_obj_right.select)));
+      }
 
-    unique_ptr<Expression> right(filter_obj_right.is_attr
-                                          ? static_cast<Expression *>(new FieldExpr(filter_obj_right.field))
-                                          : static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
 
-    ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
-    cmp_exprs.emplace_back(cmp_expr);
+      ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
+      cmp_exprs.emplace_back(cmp_expr);
+    }
+
   }
 
   unique_ptr<PredicateLogicalOperator> predicate_oper;
   if (!cmp_exprs.empty()) {
-    unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
-    predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
+    if(filter_stmt->is_and()){
+      unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
+      predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
+    }else{
+      unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::OR, cmp_exprs));
+      predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
+    }
+
   }
 
   logical_operator = std::move(predicate_oper);

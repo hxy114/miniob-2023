@@ -24,7 +24,7 @@ See the Mulan PSL v2 for more details. */
 class Record;
 class TupleCellSpec;
 class Trx;
-
+extern std::map<string,RowTuple>globe_current_rows;
 /**
  * @brief 物理算子
  * @defgroup PhysicalOperator

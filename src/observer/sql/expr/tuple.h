@@ -140,10 +140,10 @@ public:
   RowTuple() = default;
   virtual ~RowTuple()
   {
-    for (FieldExpr *spec : speces_) {
+    /*for (FieldExpr *spec : speces_) {
       delete spec;
     }
-    speces_.clear();
+    speces_.clear();*/
   }
 
   void set_record(Record *record)

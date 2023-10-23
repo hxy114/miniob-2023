@@ -43,6 +43,7 @@ RC TableScanPhysicalOperator::next()
     }
 
     tuple_.set_record(&current_record_);
+    globe_current_rows[table_->name()]=tuple_;
     rc = filter(tuple_, filter_result);
     if (rc != RC::SUCCESS) {
       return rc;
@@ -61,6 +62,7 @@ RC TableScanPhysicalOperator::next()
 
 RC TableScanPhysicalOperator::close()
 {
+  globe_current_rows.erase(table_->name());
   return record_scanner_.close_scan();
 }
 

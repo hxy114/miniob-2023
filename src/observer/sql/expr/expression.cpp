@@ -15,11 +15,18 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/expression.h"
 #include "sql/expr/tuple.h"
 #include <regex>
+#include "sql/operator/logical_operator.h"
+#include "sql/optimizer/logical_plan_generator.h"
+#include "sql/operator/physical_operator.h"
+#include "sql/optimizer/physical_plan_generator.h"
 using namespace std;
 
 RC FieldExpr::get_value(const Tuple &tuple, Value &value) const
 {
-  return tuple.find_cell(TupleCellSpec(table_name(), field_name()), value);
+   if(tuple.find_cell(TupleCellSpec(table_name(), field_name()), value)==RC::NOTFOUND){
+     return globe_current_rows[table_name()].find_cell(TupleCellSpec(table_name(), field_name()), value);
+   }
+   return RC::SUCCESS;
 }
 
 RC ValueExpr::get_value(const Tuple &tuple, Value &value) const
@@ -29,6 +36,35 @@ RC ValueExpr::get_value(const Tuple &tuple, Value &value) const
 }
 
 /////////////////////////////////////////////////////////////////////////////////
+RC SubSelectExpr::get_values(const Tuple &tuple, std::vector<Value> &values)const {
+  SelectStmt select_stmt = sub_select_;
+  unique_ptr<LogicalOperator> logical_operator;
+  LogicalPlanGenerator logicalPlanGenerator;
+  RC rc = logicalPlanGenerator.create(&select_stmt, logical_operator);
+  if(rc!=RC::SUCCESS){
+    return rc;
+  }
+  unique_ptr<PhysicalOperator> physical_operator;
+  PhysicalPlanGenerator physicalPlanGenerator;
+  rc=physicalPlanGenerator.create(*logical_operator,physical_operator);
+  if(rc!=RC::SUCCESS){
+    return rc;
+  }
+  physical_operator->open(nullptr);
+  while(RC::SUCCESS==(rc=physical_operator->next())){
+    Tuple *tuple1;
+    tuple1=physical_operator->current_tuple();
+    Value value;
+    tuple1->cell_at(0,value);
+    values.push_back(value);
+  }
+  if (rc == RC::RECORD_EOF) {
+    rc = RC::SUCCESS;
+  }
+  return rc;
+
+}
+////////////////////////////////////////////////////////////////////////////////////
 CastExpr::CastExpr(unique_ptr<Expression> child, AttrType cast_type)
     : child_(std::move(child)), cast_type_(cast_type)
 {}
@@ -92,7 +128,7 @@ std::string wildcardToRegex(const std::string& wildcard) {
 }
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
-  if((left.attr_type()==NULLS||right.attr_type()==NULLS)&&(comp_!=IS_NOT_NULL&&comp_!=IS_NULL)){
+  if((left.attr_type()==NULLS||right.attr_type()==NULLS)&&(comp_!=IS_NOT_NULL&&comp_!=IS_NULL&&comp_!=NOT_IN_OP&&comp_!=IN_OP)){
     result=false;
     return RC::SUCCESS;
   }
@@ -119,33 +155,61 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
     }else if(comp_==IS_NOT_NULL&&left.attr_type()!=NULLS){
       result= true;
     }
-  }else{
-    int cmp_result = left.compare(right);
-    result = false;
-    switch (comp_) {
-      case EQUAL_TO: {
-        result = (0 == cmp_result);
-      } break;
-      case LESS_EQUAL: {
-        result = (cmp_result <= 0);
-      } break;
-      case NOT_EQUAL: {
-        result = (cmp_result != 0);
-      } break;
-      case LESS_THAN: {
-        result = (cmp_result < 0);
-      } break;
-      case GREAT_EQUAL: {
-        result = (cmp_result >= 0);
-      } break;
-      case GREAT_THAN: {
-        result = (cmp_result > 0);
-      } break;
-      default: {
-        LOG_WARN("unsupported comparison. %d", comp_);
-        rc = RC::INTERNAL;
-      } break;
+  }else if((comp_==NOT_IN_OP||comp_==IN_OP)&&(right.attr_type()==NULLS||left.attr_type()==NULLS)) {
+    if(comp_==IN_OP&&left.attr_type()==NULLS){
+      if(right.attr_type()==NULLS) {
+        result=true;
+      }else{
+        result=false;
+      }
+
+    }else if(comp_==IN_OP&&left.attr_type()!=NULLS){
+      if(right.attr_type()==NULLS) {
+        result= false;
+      }else {
+        result=true;
+      }
+    }else if(comp_==NOT_IN_OP&&left.attr_type()==NULLS){
+      if(right.attr_type()==NULLS) {
+        result=false;
+      }else{
+        result=true;
+      }
+    }else if(comp_==NOT_IN_OP&&left.attr_type()!=NULLS){
+      if(right.attr_type()==NULLS) {
+        result= false;
+      }else {
+        result=true;
+      }
     }
+  }else{
+      int cmp_result = left.compare(right);
+      result = false;
+      switch (comp_) {
+      case EQUAL_TO:case IN_OP: {
+          result = (0 == cmp_result);
+        } break;
+        case LESS_EQUAL: {
+          result = (cmp_result <= 0);
+        } break;
+        case NOT_EQUAL:case NOT_IN_OP: {
+          result = (cmp_result != 0);
+        } break;
+        case LESS_THAN: {
+          result = (cmp_result < 0);
+        } break;
+        case GREAT_EQUAL: {
+          result = (cmp_result >= 0);
+        } break;
+        case GREAT_THAN: {
+          result = (cmp_result > 0);
+        } break;
+        default: {
+          LOG_WARN("unsupported comparison. %d", comp_);
+          rc = RC::INTERNAL;
+        } break;
+      }
+
   }
 
 
@@ -175,26 +239,175 @@ RC ComparisonExpr::try_get_value(Value &cell) const
 
 RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
 {
-  Value left_value;
-  Value right_value;
+  if(left_->type()!=ExprType::SUBSELECT&&right_->type()!=ExprType::SUBSELECT){
+    Value left_value;
+    Value right_value;
 
-  RC rc = left_->get_value(tuple, left_value);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
-    return rc;
-  }
-  rc = right_->get_value(tuple, right_value);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
-    return rc;
-  }
+    RC rc = left_->get_value(tuple, left_value);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+      return rc;
+    }
+    rc = right_->get_value(tuple, right_value);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+      return rc;
+    }
 
-  bool bool_value = false;
-  rc = compare_value(left_value, right_value, bool_value);
-  if (rc == RC::SUCCESS) {
-    value.set_boolean(bool_value);
+    bool bool_value = false;
+    rc = compare_value(left_value, right_value, bool_value);
+    if (rc == RC::SUCCESS) {
+      value.set_boolean(bool_value);
+    }
+    return rc;
+  }else{
+    if(comp_==NOT_EXISTS_OP||comp_==EXISTS_OP){
+      std::vector<Value>right_values;
+      RC rc = right_->get_values(tuple, right_values);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+        return rc;
+      }
+      if(right_values.empty()){
+        if(comp_==NOT_EXISTS_OP){
+          value.set_boolean(true);
+        }else{
+          value.set_boolean(false);
+        }
+      }else{
+        if(comp_==EXISTS_OP){
+          value.set_boolean(true);
+        }else{
+          value.set_boolean(false);
+        }
+      }
+    }else if(comp_==NOT_IN_OP||comp_==IN_OP){
+      Value left_value,right_value;
+      std::vector<Value>left_values,right_values;
+      RC rc;
+      if(left_->type()==ExprType::SUBSELECT){
+         rc = left_->get_values(tuple, left_values);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+          return rc;
+        }
+        if(right_values.size()>1){
+          LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+          return RC::INTERNAL;
+        }
+      }else{
+         rc = left_->get_value(tuple, left_value);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+          return rc;
+        }
+      }
+      if(right_->type()==ExprType::SUBSELECT){
+         rc = right_->get_values(tuple, right_values);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+          return rc;
+        }
+      }else{
+        /*RC rc = right_->get_value(tuple, right_value);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+          return rc;
+        }*/
+        LOG_WARN("failed to get value of right expression. ");
+        return RC::INTERNAL;
+      }
+      if(left_values.size()>1){
+        return  RC::INTERNAL;
+      }else if(left_values.size()==1){
+        left_value=left_values[0];
+      }
+      for(int i=0;i<right_values.size();i++){
+        bool bool_value = false;
+        rc = compare_value(left_value, right_values[i], bool_value);
+
+        if(comp_==NOT_IN_OP){
+          if(!bool_value){
+            if (rc == RC::SUCCESS) {
+              value.set_boolean(false);
+              return rc;
+            }
+          }
+        }else{
+          if(bool_value){
+            if (rc == RC::SUCCESS) {
+              value.set_boolean(true);
+              return rc;
+            }
+          }
+        }
+      }
+      if(comp_==NOT_IN_OP){
+        value.set_boolean(true);
+        return rc;
+      }else{
+        value.set_boolean(false);
+        return rc;
+      }
+
+
+    }else{
+      Value left_value,right_value;
+      std::vector<Value>left_values,right_values;
+      RC rc;
+      if(left_->type()==ExprType::SUBSELECT){
+        rc = left_->get_values(tuple, left_values);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+          return rc;
+        }
+        if(right_values.size()>1){
+          LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+          return RC::INTERNAL;
+        }
+      }else{
+        rc = left_->get_value(tuple, left_value);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+          return rc;
+        }
+      }
+      if(right_->type()==ExprType::SUBSELECT){
+        rc = right_->get_values(tuple, right_values);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+          return rc;
+        }
+      }else{
+        RC rc = right_->get_value(tuple, right_value);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+          return rc;
+        }
+
+      }
+      if(left_values.size()>1){
+        return  RC::INTERNAL;
+      }else if(left_values.size()==1){
+        left_value=left_values[0];
+      }
+      if(right_values.size()>1){
+        return  RC::INTERNAL;
+      }else if(right_values.size()==1){
+        right_value=right_values[0];
+      }
+      bool bool_value = false;
+      rc = compare_value(left_value, right_value, bool_value);
+      if (rc == RC::SUCCESS) {
+        value.set_boolean(bool_value);
+      }
+      return rc;
+
+
+    }
   }
-  return rc;
+  return RC::SUCCESS;
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////

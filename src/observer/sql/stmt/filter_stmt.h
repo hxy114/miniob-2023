@@ -19,27 +19,32 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/parse_defs.h"
 #include "sql/stmt/stmt.h"
 #include "sql/expr/expression.h"
-
+#include "sql/stmt/select_stmt.h"
 class Db;
 class Table;
 class FieldMeta;
 
 struct FilterObj 
 {
-  bool is_attr;
+  ConditionValueType filter_type_;
   Field field;
   Value value;
+  SelectStmt select;
 
   void init_attr(const Field &field)
   {
-    is_attr = true;
+    filter_type_ = ATTR_TYPE;
     this->field = field;
   }
 
   void init_value(const Value &value)
   {
-    is_attr = false;
+    filter_type_ = VALUE_TYPE;
     this->value = value;
+  }
+  void init_select(const SelectStmt &selectStmt){
+    filter_type_=SUB_SELECT_TYPE;
+    this->select=selectStmt;
   }
 };
 
@@ -99,14 +104,18 @@ public:
   {
     return filter_units_;
   }
+  bool is_and()const{
+    return is_and_;
+  }
 
 public:
   static RC create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-      const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt);
+      const ConditionSqlNode *conditions, int condition_num, std::unordered_map<std::string, Table *>top_tables,FilterStmt *&stmt);
 
   static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-      const ConditionSqlNode &condition, FilterUnit *&filter_unit);
+      const ConditionSqlNode &condition, std::unordered_map<std::string, Table *>top_tables,FilterUnit *&filter_unit);
 
 private:
   std::vector<FilterUnit *> filter_units_;  // 默认当前都是AND关系
+  bool is_and_;
 };

@@ -22,8 +22,8 @@ See the Mulan PSL v2 for more details. */
 SelectStmt::~SelectStmt()
 {
   if (nullptr != filter_stmt_) {
-    delete filter_stmt_;
-    filter_stmt_ = nullptr;
+    //delete filter_stmt_;
+    //filter_stmt_ = nullptr;
   }
 }
 
@@ -36,7 +36,7 @@ static void wildcard_fields(Table *table, std::vector<Field> &field_metas)
   }
 }
 
-RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
+RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool is_sub_select,std::unordered_map<std::string, Table *>top_tables)
 {
   if (nullptr == db) {
     LOG_WARN("invalid argument. db is null");
@@ -155,7 +155,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
         &table_map,
         select_sql.conditions.data(),
         static_cast<int>(select_sql.conditions.size()),
-        filter_stmt);
+        top_tables,filter_stmt);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot construct filter stmt");
       return rc;
@@ -170,6 +170,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
     select_stmt->filter_stmt_ = filter_stmt;
     select_stmt->query_fields_.swap(query_fields);
     select_stmt->is_agg_= true;
+    select_stmt->top_tables_=top_tables;
+    select_stmt->is_sub_select_=is_sub_select;
     stmt = select_stmt;
     return RC::SUCCESS;
 
@@ -306,6 +308,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
         &table_map,
         select_sql.conditions.data(),
         static_cast<int>(select_sql.conditions.size()),
+        top_tables,
         filter_stmt);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot construct filter stmt");
@@ -321,6 +324,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
     select_stmt->is_agg_= false;
     select_stmt->order_by_sequences_.swap(order_by_sequences);
     select_stmt->order_by_fields_.swap(order_by_fields);
+    select_stmt->top_tables_=top_tables;
+    select_stmt->is_sub_select_=is_sub_select;
     stmt = select_stmt;
     return RC::SUCCESS;
 

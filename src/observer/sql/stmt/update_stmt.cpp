@@ -180,6 +180,7 @@ RC UpdateStmt::create(Db *db,  UpdateSqlNode &update, Stmt *&stmt)
       &table_map,
       update.conditions.data(),
       static_cast<int>(update.conditions.size()),
+      std::unordered_map<std::string, Table *>(),
       filter_stmt);
   if (rc != RC::SUCCESS) {
     LOG_WARN("cannot construct filter stmt");

@@ -42,7 +42,7 @@ public:
   }
 
 public:
-  static RC create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt);
+  static RC create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool is_sub_select=false,std::unordered_map<std::string, Table *>top_tables=std::unordered_map<std::string, Table *>());
 
 public:
   const std::vector<Table *> &tables() const
@@ -63,6 +63,12 @@ public:
   const std::vector<OrderBySequence> &order_by_sequences()const{
     return  order_by_sequences_;
   }
+  bool is_sub_select(){
+    return is_sub_select_;
+  }
+  const  std::unordered_map<std::string, Table *>&top_tables()const{
+    return  top_tables_;
+  }
   bool is_agg(){
     return is_agg_;
   }
@@ -79,4 +85,6 @@ private:
   std::vector<RelAttrSqlNode> attributes_;
   std::vector<Field>order_by_fields_;
   std::vector<OrderBySequence>order_by_sequences_;
+  bool is_sub_select_;
+  std::unordered_map<std::string, Table *>top_tables_;
 };

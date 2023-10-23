@@ -113,6 +113,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
          ORDER
          BY
          ASC
+         IN
+         EXISTS
+         OR
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -621,6 +624,7 @@ select_stmt:        /*  select 语句的语法解析树*/
 
            if ($6 != nullptr) {
              $$->selection.conditions.insert($$->selection.conditions.begin(),$6->begin(),$6->end());
+             std::reverse($$->selection.conditions.begin(), $$->selection.conditions.end());
              delete $6;
            }
            if($7!=nullptr){
@@ -628,6 +632,7 @@ select_stmt:        /*  select 语句的语法解析树*/
            std::reverse($$->selection.order_by.begin(), $$->selection.order_by.end());
                         delete $7;
            }
+           $$->selection.is_sub_select=false;
            free($4);
          }
 
@@ -922,22 +927,30 @@ condition_list:
     }
     | condition {
       $$ = new std::vector<ConditionSqlNode>;
+      $1->is_conjunction_or=false;
       $$->emplace_back(*$1);
       delete $1;
     }
     | condition AND condition_list {
       $$ = $3;
+      $1->is_conjunction_or=false;
       $$->emplace_back(*$1);
       delete $1;
     }
+    | condition OR condition_list {
+           $$ = $3;
+           $1->is_conjunction_or=true;
+           $$->emplace_back(*$1);
+           delete $1;
+         }
     ;
 condition:
     rel_attr comp_op value
     {
       $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
+      $$->left_type = ATTR_TYPE;
       $$->left_attr = *$1;
-      $$->right_is_attr = 0;
+      $$->right_type = VALUE_TYPE;
       $$->right_value = *$3;
       $$->comp = $2;
 
@@ -947,9 +960,9 @@ condition:
     | value comp_op value 
     {
       $$ = new ConditionSqlNode;
-      $$->left_is_attr = 0;
+      $$->left_type = VALUE_TYPE;
       $$->left_value = *$1;
-      $$->right_is_attr = 0;
+      $$->right_type = VALUE_TYPE;
       $$->right_value = *$3;
       $$->comp = $2;
 
@@ -959,9 +972,9 @@ condition:
     | rel_attr comp_op rel_attr
     {
       $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
+      $$->left_type = ATTR_TYPE;
       $$->left_attr = *$1;
-      $$->right_is_attr = 1;
+      $$->right_type = ATTR_TYPE;
       $$->right_attr = *$3;
       $$->comp = $2;
 
@@ -971,15 +984,91 @@ condition:
     | value comp_op rel_attr
     {
       $$ = new ConditionSqlNode;
-      $$->left_is_attr = 0;
+      $$->left_type = VALUE_TYPE;
       $$->left_value = *$1;
-      $$->right_is_attr = 1;
+      $$->right_type = ATTR_TYPE;
       $$->right_attr = *$3;
       $$->comp = $2;
 
       delete $1;
       delete $3;
     }
+    | value comp_op LBRACE select_stmt RBRACE
+    {
+    $$ = new ConditionSqlNode;
+          $$->left_type = VALUE_TYPE;
+          $$->left_value = *$1;
+          $$->right_type = SUB_SELECT_TYPE;
+          $$->right_select = &($4->selection);
+          $$->right_select->is_sub_select=true;
+          $$->comp = $2;
+          delete $1;
+
+    }
+    | LBRACE select_stmt RBRACE comp_op value
+    {
+    $$ = new ConditionSqlNode;
+              $$->left_type = SUB_SELECT_TYPE;
+              $$->left_select =  &($2->selection);
+              $$->left_select->is_sub_select=true;
+              $$->right_type = VALUE_TYPE;
+              $$->right_value = *$5;
+              $$->comp = $4;
+              delete $5;
+
+    }
+    |LBRACE select_stmt RBRACE comp_op LBRACE select_stmt RBRACE
+    {
+    $$ = new ConditionSqlNode;
+              $$->left_type = SUB_SELECT_TYPE;
+              $$->left_select =  &($2->selection);
+              $$->left_select->is_sub_select=true;
+              $$->right_type = SUB_SELECT_TYPE;
+              $$->right_select =  &($6->selection);
+              $$->right_select->is_sub_select=true;
+              $$->comp = $4;
+
+
+    }
+    | rel_attr comp_op LBRACE select_stmt RBRACE
+    {
+    $$ = new ConditionSqlNode;
+              $$->left_type = ATTR_TYPE;
+              $$->left_attr = *$1;
+              $$->right_type = SUB_SELECT_TYPE;
+              $$->right_select =  &($4->selection);
+              $$->right_select->is_sub_select=true;
+              $$->comp = $2;
+              delete $1;
+
+    }
+    | LBRACE select_stmt RBRACE comp_op rel_attr
+     {
+     $$ = new ConditionSqlNode;
+               $$->left_type = SUB_SELECT_TYPE;
+               $$->left_select =  &($2->selection);
+               $$->left_select->is_sub_select=true;
+               $$->right_type = ATTR_TYPE;
+               $$->right_attr = *$5;
+               $$->comp = $4;
+               delete $5;
+
+     }
+     | EXISTS LBRACE select_stmt RBRACE{
+     $$ = new ConditionSqlNode;
+                    $$->right_type = SUB_SELECT_TYPE;
+                    $$->right_select =  &($3->selection);
+                    $$->right_select->is_sub_select=true;
+                    $$->comp = EXISTS_OP;
+
+     }
+     | NOT EXISTS LBRACE select_stmt RBRACE{
+$$ = new ConditionSqlNode;
+                    $$->right_type = SUB_SELECT_TYPE;
+                    $$->right_select =  &($4->selection);
+                    $$->right_select->is_sub_select=true;
+                    $$->comp = NOT_EXISTS_OP;
+     }
     ;
 
 comp_op:
@@ -993,6 +1082,8 @@ comp_op:
     | NOT LK {$$ = NOT_LIKE;}
     | IS    {$$=IS_NULL;}
     | IS NOT {$$=IS_NOT_NULL;}
+    | IN   {$$=IN_OP;}
+    | NOT IN {$$=NOT_IN_OP;}
     ;
 agg:
     MAX_agg{$$=MAX_AGG;}
