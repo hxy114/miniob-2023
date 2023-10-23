@@ -41,7 +41,7 @@ RC AggPhysicalOperator::next()
       auto tuple=children_[0]->current_tuple();
       for(int i=0;i<values.size();i++){
           if(attributes_[i].agg==COUNT_AGG){
-            if(fields_[i].field_name()=="*"){
+            if(strcmp(fields_[i].field_name(),"*" )==0){
               if(values[i].attr_type()==NULLS){
                 values[i].set_int(1);
               }else{
