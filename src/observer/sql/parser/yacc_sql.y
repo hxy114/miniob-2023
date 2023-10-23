@@ -763,14 +763,14 @@ expression:
     ;
 
 select_attr:
-    '*' {
+    /*'*' {
       $$ = new std::vector<RelAttrSqlNode>;
       RelAttrSqlNode attr;
       attr.relation_name  = "";
       attr.attribute_name = "*";
       attr.agg=NO_AGG;
       $$->emplace_back(attr);
-    }
+    }*/
    /* | agg LBRACE arg_list RBRACE{
          $$ = new std::vector<RelAttrSqlNode>;
                RelAttrSqlNode attr;
@@ -779,7 +779,7 @@ select_attr:
                attr.agg=$1;
                $$->emplace_back(attr);
          }*/
-    | rel_attr attr_list {
+     rel_attr attr_list {
       if ($2 != nullptr) {
         $$ = $2;
       } else {
@@ -869,6 +869,20 @@ rel_attr:
                      }
                free($3);
                free($5);
+    }
+    |'*' {
+          $$ = new RelAttrSqlNode;
+          $$->relation_name  = "";
+          $$->attribute_name = "*";
+          $$->is_right=true;
+          $$->agg=NO_AGG;
+        }
+    |ID DOT '*'{
+           $$ = new RelAttrSqlNode;
+          $$->relation_name  = $1;
+          $$->attribute_name = "*";
+          $$->is_right=true;
+          $$->agg=NO_AGG;
     }
     ;
 
