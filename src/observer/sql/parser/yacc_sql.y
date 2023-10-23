@@ -109,6 +109,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         SUM_agg
         UNIQUE
         AS
+        LENGTH_func
+        ROUND_func
+        FORMAT_func
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -130,7 +133,10 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   int                               number;
   float                             floats;
   enum Agg                          agg;
-  std::vector<UpdateValue>*         update_list;
+  std::vector<UpdateValue> *        update_list;
+  LengthParam *                     length_func_param;
+  RoundParam *                      round_func_param;
+  FormatParam *                     format_func_param;
 }
 
 %token <number> NUMBER
@@ -154,10 +160,14 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <value_list>          value_list
 %type <condition_list>      where
 %type <condition_list>      on
+%type <string>              as
 %type <condition_list>      condition_list
 %type <rel_attr_list>       select_attr
 %type <inner_join_list>     rel_list
 %type <rel_attr_list>       attr_list
+%type <length_func_param>   length_func_param
+%type <round_func_param>    round_func_param
+%type <format_func_param>   format_func_param
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <sql_node>            calc_stmt
@@ -553,52 +563,42 @@ update_list:
    }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list  where
-         {
-           $$ = new ParsedSqlNode(SCF_SELECT);
-           if ($2 != nullptr) {
-             $$->selection.attributes.swap(*$2);
-             delete $2;
-           }
-           if ($5 != nullptr) {
-             $$->selection.relations.swap($5->relations);
-             $$->selection.conditions.swap($5->conditions);
-             $$->selection.alias_map.insert($5->alias_map.begin(), $5->alias_map.end());
-             delete $5;
-           }
-           $$->selection.relations.push_back($4);
-           std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
+    SELECT select_attr FROM ID as rel_list where {
+        $$ = new ParsedSqlNode(SCF_SELECT);
+        if ($2 != nullptr) {
+          $$->selection.attributes.swap(*$2);
+          delete $2;
+        }
+        if ($6 != nullptr) {
+          $$->selection.relations.swap($6->relations);
+          $$->selection.conditions.swap($6->conditions);
+          $$->selection.alias_map.insert($6->alias_map.begin(), $6->alias_map.end());
+          delete $6;
+        }
+        $$->selection.relations.push_back($4);
+        if ($5[0] != '\0') {
+          $$->selection.alias_map.insert(std::pair<std::string, std::string>($5, $4));
+        }
+        
+        std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
 
-           if ($6 != nullptr) {
-             $$->selection.conditions.insert($$->selection.conditions.begin(),$6->begin(),$6->end());
-             delete $6;
-           }
-           free($4);
-         }
-    | SELECT select_attr FROM ID AS ID rel_list where
-         {
-           $$ = new ParsedSqlNode(SCF_SELECT);
-           if ($2 != nullptr) {
-             $$->selection.attributes.swap(*$2);
-             delete $2;
-           }
-           if ($7 != nullptr) {
-             $$->selection.relations.swap($7->relations);
-             $$->selection.conditions.swap($7->conditions);
-             $$->selection.alias_map.insert($7->alias_map.begin(), $7->alias_map.end());
-             delete $7;
-           }
-           $$->selection.relations.push_back($4);
-           $$->selection.alias_map.insert({$6, $4});
-           std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
-
-           if ($8 != nullptr) {
-             $$->selection.conditions.insert($$->selection.conditions.begin(),$8->begin(),$8->end());
-             delete $8;
-           }
-           free($4);
-         }
-
+        if ($7 != nullptr) {
+          $$->selection.conditions.insert($$->selection.conditions.begin(),$7->begin(),$7->end());
+          delete $7;
+        }
+        free($4);
+    }
+    | SELECT select_attr where {
+      $$ = new ParsedSqlNode(SCF_SELECT);
+      if ($2 != nullptr) {
+          $$->selection.attributes.swap(*$2);
+          delete $2;
+        }
+      if ($3 != nullptr) {
+          $$->selection.conditions.insert($$->selection.conditions.begin(),$3->begin(),$3->end());
+          delete $3;
+        }
+    }
     ;
 calc_stmt:
     CALC expression_list
@@ -662,14 +662,6 @@ select_attr:
       attr.agg=NO_AGG;
       $$->emplace_back(attr);
     }
-   /* | agg LBRACE arg_list RBRACE{
-         $$ = new std::vector<RelAttrSqlNode>;
-               RelAttrSqlNode attr;
-               attr.relation_name  = "";
-               attr.attribute_name = "*";
-               attr.agg=$1;
-               $$->emplace_back(attr);
-         }*/
     | rel_attr attr_list {
       if ($2 != nullptr) {
         $$ = $2;
@@ -712,87 +704,74 @@ arg_list:
         $$->push_back($1);
     }
 rel_attr:
-    ID {
+    ID as {
       $$ = new RelAttrSqlNode;
       $$->attribute_name = $1;
       $$->agg=NO_AGG;
       $$->is_right=true;
+      /* 不需要考虑列的别名重复 */
+      $$->alias_name = $2;
       free($1);
     }
-    |agg LBRACE arg_list RBRACE{
-         $$ = new RelAttrSqlNode;
-         if($3==nullptr||$3->size()!=1){
-         $$->is_right=false;
-         }else{
-         $$->attribute_name = (*$3)[0];
-         $$->agg=$1;
-         }
-          free($3);
-
-         }
-    |agg LBRACE arg_list RBRACE AS ID{
-         $$ = new RelAttrSqlNode;
-         if($3==nullptr||$3->size()!=1){
-         $$->is_right=false;
-         }else{
-         $$->attribute_name = (*$3)[0];
-         $$->agg=$1;
-         }
-         $$->alias_name = $6;
-          free($3);
-          free($6);
-
-         }
-    | ID DOT ID {
+    | ID DOT ID as {
       $$ = new RelAttrSqlNode;
       $$->relation_name  = $1;
       $$->attribute_name = $3;
       $$->agg=NO_AGG;
       $$->is_right=true;
+      /* 不需要考虑列的别名重复 */
+      $$->alias_name = $4;
       free($1);
       free($3);
     }
-    | agg LBRACE ID DOT ID RBRACE{
-               $$ = new RelAttrSqlNode;
-               $$->relation_name  = $3;
-               $$->attribute_name = $5;
-               $$->is_right=true;
-               $$->agg=$1;
-               free($3);
-               free($5);
+    |agg LBRACE arg_list RBRACE as {
+         $$ = new RelAttrSqlNode;
+         if($3==nullptr||$3->size()!=1){
+         $$->is_right=false;
+         }else{
+         $$->attribute_name = (*$3)[0];
+         $$->agg=$1;
+         }
+         $$->alias_name = $5;
+          free($3);
+         }
+    | agg LBRACE ID DOT ID RBRACE as {
+        $$ = new RelAttrSqlNode;
+        $$->relation_name  = $3;
+        $$->attribute_name = $5;
+        $$->is_right=true;
+        $$->alias_name = $7;
+        $$->agg=$1;
+        free($3);
+        free($5);
     }
-    | agg LBRACE ID DOT ID RBRACE AS ID{
-               $$ = new RelAttrSqlNode;
-               $$->relation_name  = $3;
-               $$->attribute_name = $5;
-               $$->is_right=true;
-               $$->alias_name = $8;
-               $$->agg=$1;
-               free($3);
-               free($5);
-               free($8);
-    }
-    | ID AS ID {
+    | LENGTH_func LBRACE length_func_param RBRACE as {
       $$ = new RelAttrSqlNode;
-      $$->attribute_name = $1;
-      $$->agg=NO_AGG;
+      $$->relation_name = $3->relation_name;
+      $$->attribute_name = $3->attribute_name;
       $$->is_right=true;
-      /* 不需要考虑列的别名重复 */
-      $$->alias_name = $3;
-      free($1);
-    }
-    | ID DOT ID AS ID {
-      $$ = new RelAttrSqlNode;
-      $$->relation_name  = $1;
-      $$->attribute_name = $3;
-      $$->agg=NO_AGG;
-      $$->is_right=true;
-      /* 不需要考虑列的别名重复 */
       $$->alias_name = $5;
-      free($1);
-      free($3);
+      /*$$->func = LENGTH_FUNC;*/
+      $$->lengthparam = *$3;
     }
-
+    | ROUND_func LBRACE round_func_param RBRACE as {
+      $$ = new RelAttrSqlNode;
+      $$->relation_name = $3->relation_name;
+      $$->attribute_name = $3->attribute_name;
+      $$->is_right=true;
+      $$->alias_name = $5;
+      $$->func = ROUND_FUNC;
+      $$->roundparam = *$3;
+    }
+    | FORMAT_func LBRACE format_func_param RBRACE as {
+      $$ = new RelAttrSqlNode;
+      $$->relation_name = $3->relation_name;
+      $$->attribute_name = $3->attribute_name;
+      $$->is_right=true;
+      $$->alias_name = $5;
+      $$->func = FORMAT_FUNC;
+      $$->formatparam = *$3;
+    }
     ;
 
 attr_list:
@@ -817,24 +796,17 @@ rel_list:
     {
       $$ = nullptr;
     }
-    | COMMA ID rel_list {
-      if ($3 != nullptr) {
-        $$ = $3;
-      } else {
-        $$ = new InnerJoinSqlNode;
-      }
-
-      $$->relations.push_back($2);
-      free($2);
-    }
-    | COMMA ID AS ID rel_list {
-      if ($5 != nullptr) {
-        $$ = $5;
+    | COMMA ID as rel_list {
+      if ($4 != nullptr) {
+        $$ = $4;
       } else {
         $$ = new InnerJoinSqlNode;
       }
       $$->relations.push_back($2);
-      $$->alias_map.insert({$4, $2});
+      if ($3[0] != '\0') {
+        $$->alias_map.insert(std::pair<std::string, std::string>($3, $2));
+      }
+      
       free($2);
     }
     |INNER JOIN ID on rel_list {
@@ -853,6 +825,117 @@ rel_list:
          }
     ;
 
+/* func_list 解析不包含from语句的function用法，即用function处理括号内的直接输入*/
+
+/* Function length()的参数匹配 */
+length_func_param:
+  ID {
+    $$ = new LengthParam;
+    $$->attribute_name = $1;
+    free($1);
+  }
+  | ID DOT ID {
+    $$ = new LengthParam;
+    $$->relation_name = $1;
+    $$->attribute_name = $3;
+    free($1);
+    free($3);
+  }
+  | SSS {
+    $$ = new LengthParam;
+
+    char *tmp = common::substr($1,1,strlen($1)-2);
+    $$->raw_data = Value(tmp,CHARS);
+    free(tmp);
+    free($1);
+  }
+  ;
+/* Function round()的参数匹配 */
+round_func_param:
+  ID COMMA NUMBER {
+    $$ = new RoundParam;
+    $$->attribute_name = $1;
+    $$->bits = Value((int)$3);
+    free($1);
+  }
+  | ID {
+    $$ = new RoundParam;
+    $$->attribute_name = $1;
+    free($1);
+  }
+  | ID DOT ID COMMA NUMBER {
+    $$ = new RoundParam;
+    $$->relation_name = $1;
+    $$->attribute_name = $3;
+    $$->bits = Value((int)$5);
+    free($1);
+    free($3);
+  }
+  | ID DOT ID {
+    $$ = new RoundParam;
+    $$->relation_name = $1;
+    $$->attribute_name = $3;
+    free($1);
+    free($3);
+  }
+  | FLOAT COMMA NUMBER {
+    $$ = new RoundParam;
+    $$->raw_data = Value((float)$1);
+    $$->bits = Value((int)$3);
+  }
+  | FLOAT {
+    $$ = new RoundParam;
+    $$->raw_data = Value((float)$1);
+  }
+  ;
+/* Function date_format()的参数匹配 */
+format_func_param:
+  ID COMMA SSS {
+    $$ = new FormatParam;
+    $$->attribute_name = $1;
+
+    char *tmp = common::substr($3,1,strlen($3)-2);
+    $$->format = Value(tmp,CHARS);
+    free(tmp); 
+    free($1);
+  }
+  | ID DOT ID COMMA SSS {
+    $$ = new FormatParam;
+    $$->relation_name = $1;
+    $$->attribute_name = $3;
+
+    char *tmp = common::substr($5,1,strlen($5)-2);
+    $$->format = Value(tmp,CHARS);
+    free(tmp); 
+    free($1);
+    free($3);
+  }
+  | DATE COMMA SSS {
+    $$ = new FormatParam;
+
+    char *tmp = common::substr($1,1,strlen($1)-2);
+    $$->raw_data = Value(tmp,DATES);
+    free(tmp);
+
+    char *tmp2 = common::substr($3,1,strlen($3)-2);
+    $$->format = Value(tmp2,CHARS);
+    free(tmp2);
+    free($3);
+  }
+  ;
+
+as:
+  /* empty */
+  {
+    $$ = (char *)"";
+  }
+  | AS ID {
+    $$ = (char *)$2;
+  }
+  | ID {
+    $$ = (char *)$1;
+  }
+  ;
 
 where:
     /* empty */

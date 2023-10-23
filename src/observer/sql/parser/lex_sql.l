@@ -124,6 +124,9 @@ min                                     RETURN_TOKEN(MIN_agg);
 avg                                     RETURN_TOKEN(AVG_agg);
 count                                   RETURN_TOKEN(COUNT_agg);
 sum                                     RETURN_TOKEN(SUM_agg);
+length                                  RETURN_TOKEN(LENGTH_func);
+round                                   RETURN_TOKEN(ROUND_func);
+date_format                             RETURN_TOKEN(FORMAT_func);
 unique                                  RETURN_TOKEN(UNIQUE);
 as                                      RETURN_TOKEN(AS);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
@@ -146,7 +149,7 @@ as                                      RETURN_TOKEN(AS);
 {QUOTE}[0-9]{4}\-[0-9]{1,2}\-[0-9]{1,2}{QUOTE} yylval->string=strdup(yytext); RETURN_TOKEN(DATE);
 {QUOTE}[%\40A-Za-z0-9_/\.\-]*{QUOTE}            yylval->string=strdup(yytext); RETURN_TOKEN(PATTERN);
 \"[^"]*\"                               yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
-'[^']*\'                                yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
+\'[^']*\'                                yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
 
 .                                       LOG_DEBUG("Unknown character [%c]",yytext[0]); return yytext[0];
 %%
