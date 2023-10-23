@@ -22,7 +22,7 @@ public:
 
   PhysicalOperatorType type() const override
   {
-    return PhysicalOperatorType::PROJECT;
+    return PhysicalOperatorType::ORDERBY;
   }
 
   RC open(Trx *trx) override;
