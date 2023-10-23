@@ -201,6 +201,8 @@ RC LogicalPlanGenerator::create_plan(
        left=std::unique_ptr<Expression >(static_cast<Expression *>(new FieldExpr(filter_obj_left.field)));
       }else if(filter_obj_left.filter_type_==SUB_SELECT_TYPE){
        left=std::unique_ptr<Expression >(static_cast<Expression *>(new SubSelectExpr(filter_obj_left.select)));
+      }else if(filter_obj_left.filter_type_==VALUE_LIST_TYPE){
+       left=std::unique_ptr<Expression>(static_cast<Expression*>(new ValueListExpr(filter_obj_left.value_list)));
       }
 
       if(filter_obj_right.filter_type_==VALUE_TYPE){
@@ -209,6 +211,8 @@ RC LogicalPlanGenerator::create_plan(
        right=std::unique_ptr<Expression >(static_cast<Expression *>(new FieldExpr(filter_obj_right.field)));
       }else if(filter_obj_right.filter_type_==SUB_SELECT_TYPE){
        right=std::unique_ptr<Expression >(static_cast<Expression *>(new SubSelectExpr(filter_obj_right.select)));
+      }else if(filter_obj_right.filter_type_==VALUE_LIST_TYPE){
+       right=std::unique_ptr<Expression>(static_cast<Expression*>(new ValueListExpr(filter_obj_right.value_list)));
       }
 
 

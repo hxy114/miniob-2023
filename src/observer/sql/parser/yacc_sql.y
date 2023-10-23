@@ -1069,6 +1069,43 @@ $$ = new ConditionSqlNode;
                     $$->right_select->is_sub_select=true;
                     $$->comp = NOT_EXISTS_OP;
      }
+     |rel_attr comp_op LBRACE value value_list RBRACE{
+     $$ = new ConditionSqlNode;
+     $$->left_type=ATTR_TYPE;
+     $$->left_attr=*$1;
+                         $$->right_type = VALUE_LIST_TYPE;
+                         if($5!=nullptr){
+                         $$->right_value_list.insert($$->right_value_list.end(),$5->begin(),$5->end());
+                         }
+                         $$->right_value_list.push_back(*$4);
+                         std::reverse($$->right_value_list.begin(),$$->right_value_list.end());
+                         $$->comp = $2;
+     }
+     |LBRACE select_stmt RBRACE comp_op LBRACE value value_list RBRACE{
+           $$ = new ConditionSqlNode;
+                               $$->left_type = SUB_SELECT_TYPE;
+                               $$->left_select =  &($2->selection);
+                               $$->left_select->is_sub_select=true;
+                               if($7!=nullptr){
+                               $$->right_value_list.insert($$->right_value_list.end(),$7->begin(),$7->end());
+                               }
+                               $$->right_value_list.push_back(*$6);
+                               std::reverse($$->right_value_list.begin(),$$->right_value_list.end());
+                               $$->comp = $4;
+     }
+     |value comp_op LBRACE value value_list RBRACE{
+           $$ = new ConditionSqlNode;
+           $$->left_type=VALUE_TYPE;
+           $$->left_value=*$1;
+                               $$->right_type = VALUE_LIST_TYPE;
+                               if($5!=nullptr){
+                               $$->right_value_list.insert($$->right_value_list.end(),$5->begin(),$5->end());
+                               }
+                               $$->right_value_list.push_back(*$4);
+                               std::reverse($$->right_value_list.begin(),$$->right_value_list.end());
+                               $$->comp = $2;
+     }
+
     ;
 
 comp_op:

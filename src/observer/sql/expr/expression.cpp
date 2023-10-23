@@ -65,6 +65,11 @@ RC SubSelectExpr::get_values(const Tuple &tuple, std::vector<Value> &values)cons
 
 }
 ////////////////////////////////////////////////////////////////////////////////////
+RC ValueListExpr::get_values(const Tuple &tuple, std::vector<Value> &value)const  {
+  value.insert(value.end(),value_list_.begin(),value_list_.end());
+  return RC::SUCCESS;
+}
+////////////////////////////////////////////////////////////////////////////////////
 CastExpr::CastExpr(unique_ptr<Expression> child, AttrType cast_type)
     : child_(std::move(child)), cast_type_(cast_type)
 {}
@@ -239,7 +244,7 @@ RC ComparisonExpr::try_get_value(Value &cell) const
 
 RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
 {
-  if(left_->type()!=ExprType::SUBSELECT&&right_->type()!=ExprType::SUBSELECT){
+  if(left_->type()!=ExprType::SUBSELECT&&right_->type()!=ExprType::SUBSELECT&&left_->type()!=ExprType::VALUELIST&&right_->type()!=ExprType::VALUELIST){
     Value left_value;
     Value right_value;
 
@@ -285,24 +290,24 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
       Value left_value,right_value;
       std::vector<Value>left_values,right_values;
       RC rc;
-      if(left_->type()==ExprType::SUBSELECT){
+      if(left_->type()==ExprType::SUBSELECT||left_->type()==ExprType::VALUELIST){
          rc = left_->get_values(tuple, left_values);
         if (rc != RC::SUCCESS) {
           LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
           return rc;
         }
-        if(right_values.size()>1){
+        if(left_values.size()>1){
           LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
           return RC::INTERNAL;
         }
-      }else{
+      }else {
          rc = left_->get_value(tuple, left_value);
         if (rc != RC::SUCCESS) {
           LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
           return rc;
         }
       }
-      if(right_->type()==ExprType::SUBSELECT){
+      if(right_->type()==ExprType::SUBSELECT||right_->type()==ExprType::VALUELIST){
          rc = right_->get_values(tuple, right_values);
         if (rc != RC::SUCCESS) {
           LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
@@ -361,7 +366,7 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
           LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
           return rc;
         }
-        if(right_values.size()>1){
+        if(left_values.size()>1){
           LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
           return RC::INTERNAL;
         }
@@ -377,6 +382,10 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
         if (rc != RC::SUCCESS) {
           LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
           return rc;
+        }
+        if(right_values.size()>1){
+          LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+          return RC::INTERNAL;
         }
       }else{
         RC rc = right_->get_value(tuple, right_value);

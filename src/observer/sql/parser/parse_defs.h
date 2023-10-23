@@ -81,6 +81,7 @@ enum OrderBySequence{
 enum ConditionValueType{
   VALUE_TYPE,
   ATTR_TYPE,
+  VALUE_LIST_TYPE,
   SUB_SELECT_TYPE,
 };
 /**
@@ -98,12 +99,14 @@ struct ConditionSqlNode
   Value           left_value;      ///< left-hand side value if left_is_attr = FALSE
   RelAttrSqlNode  left_attr;       ///< left-hand side attribute
   SelectSqlNode  * left_select;
+  std::vector<Value> left_value_list;
   CompOp          comp;            ///< comparison operator
   ConditionValueType             right_type;   ///< TRUE if right-hand side is an attribute
                                    ///< 1时，操作符右边是属性名，0时，是属性值
   RelAttrSqlNode  right_attr;      ///< right-hand side attribute if right_is_attr = TRUE 右边的属性
   Value           right_value;     ///< right-hand side value if right_is_attr = FALSE
   SelectSqlNode  * right_select;
+  std::vector<Value> right_value_list;
   bool   is_conjunction_or=false;
 
 };

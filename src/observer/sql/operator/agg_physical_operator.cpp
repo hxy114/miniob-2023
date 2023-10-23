@@ -35,8 +35,9 @@ RC AggPhysicalOperator::next()
     values[i].set_null();
     count_[i]=0;
   }
+  RC rc;
   for(;;){
-    if(children_[0]->next()==RC::SUCCESS){
+    if(RC::SUCCESS==(rc=children_[0]->next())){
       auto tuple=children_[0]->current_tuple();
       for(int i=0;i<values.size();i++){
           if(attributes_[i].agg==COUNT_AGG){
@@ -171,7 +172,10 @@ RC AggPhysicalOperator::next()
           }
         }
 
-    }else{
+    }else if(rc!=RC::RECORD_EOF){
+        return  rc;
+    }
+    else{
         for(int i=0;i<attributes_.size();i++){
           if(attributes_[i].agg==AVG_AGG){
             if(values[i].attr_type()!=NULLS){

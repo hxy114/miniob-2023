@@ -45,6 +45,7 @@ enum class ExprType
   CONJUNCTION,  ///< 多个表达式使用同一种关系(AND或OR)来联结
   ARITHMETIC,   ///< 算术运算
   SUBSELECT,
+  VALUELIST,
 };
 
 /**
@@ -181,6 +182,25 @@ public:
 
 private:
   SelectStmt sub_select_;
+};
+class ValueListExpr : public Expression
+{
+public:
+  ValueListExpr() = default;
+  ValueListExpr(std::vector<Value> value_list) : value_list_(value_list)
+  {}
+  virtual ~ValueListExpr() = default;
+
+  ExprType type() const override { return ExprType::VALUELIST; }
+  AttrType value_type() const override { return value_list_[0].attr_type(); }
+
+
+  RC get_values(const Tuple &tuple, std::vector<Value> &value)const override ;
+
+  RC get_value(const Tuple &tuple, Value &value) const{return RC::INTERNAL;};
+
+private:
+  std::vector<Value> value_list_;
 };
 /**
  * @brief 类型转换表达式

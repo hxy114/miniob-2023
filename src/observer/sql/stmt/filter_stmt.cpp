@@ -146,7 +146,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       FilterObj filter_obj;
       filter_obj.init_value(condition.left_value);
       filter_unit->set_left(filter_obj);
-    }else{
+    }else if(condition.left_type==SUB_SELECT_TYPE){
       if(condition.left_select->attributes.size()>1){
         LOG_WARN("invalid ");
         return RC::INTERNAL;
@@ -164,6 +164,10 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       }
       FilterObj filter_obj;
       filter_obj.init_select(*reinterpret_cast<SelectStmt*>(stmt));
+      filter_unit->set_left(filter_obj);
+    }else if(condition.left_type==VALUE_LIST_TYPE){
+      FilterObj filter_obj;
+      filter_obj.init_value_list(condition.left_value_list);
       filter_unit->set_left(filter_obj);
     }
 
@@ -186,7 +190,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       FilterObj filter_obj;
       filter_obj.init_value(condition.right_value);
       filter_unit->set_right(filter_obj);
-    }else{
+    }else if(condition.right_type==SUB_SELECT_TYPE){
       if(condition.right_select->attributes.size()>1){
         LOG_WARN("invalid ");
         return RC::INTERNAL;
@@ -204,6 +208,10 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       }
       FilterObj filter_obj;
       filter_obj.init_select(*reinterpret_cast<SelectStmt*>(stmt));
+      filter_unit->set_right(filter_obj);
+    }else if(condition.right_type==VALUE_LIST_TYPE){
+      FilterObj filter_obj;
+      filter_obj.init_value_list(condition.right_value_list);
       filter_unit->set_right(filter_obj);
     }
   }
