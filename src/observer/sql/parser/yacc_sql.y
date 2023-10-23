@@ -838,6 +838,7 @@ rel_attr:
          $$->is_right=false;
          }else{
          $$->attribute_name = (*$3)[0];
+         $$->is_right=true;
          $$->agg=$1;
          }
          if($5!=nullptr){
@@ -870,18 +871,28 @@ rel_attr:
                free($3);
                free($5);
     }
-    |'*' {
+    |'*' as {
           $$ = new RelAttrSqlNode;
           $$->relation_name  = "";
           $$->attribute_name = "*";
+          if($2!=nullptr){
+          $$->is_right=false;
+          }else{
           $$->is_right=true;
+          }
+
           $$->agg=NO_AGG;
         }
-    |ID DOT '*'{
+    |ID DOT '*' as {
            $$ = new RelAttrSqlNode;
           $$->relation_name  = $1;
           $$->attribute_name = "*";
+          if($4!=nullptr){
+          $$->is_right=false;
+          }else{
           $$->is_right=true;
+          }
+
           $$->agg=NO_AGG;
     }
     ;

@@ -74,6 +74,9 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
         return RC::INVALID_ARGUMENT;
       }
     }
+    if(!relation_attr.is_right){
+      return  RC::INVALID_ARGUMENT;
+    }
   }
 
   // 将别名也添加到table_map中去，为了Filter中查找&
