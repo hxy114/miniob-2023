@@ -42,6 +42,9 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
     LOG_WARN("invalid argument. db is null");
     return RC::INVALID_ARGUMENT;
   }
+  if(!select_sql.is_alias_right){
+    return RC::INVALID_ARGUMENT;
+  }
 
   // collect tables in `from` statement
   std::vector<Table *> tables;

@@ -616,16 +616,23 @@ select_stmt:        /*  select 语句的语法解析树*/
              $$->selection.attributes.swap(*$2);
              delete $2;
            }
+           $$->selection.is_alias_right=true;
            if ($6 != nullptr) {
              $$->selection.relations.swap($6->relations);
              $$->selection.conditions.swap($6->conditions);
              $$->selection.alias_map.insert($6->alias_map.begin(), $6->alias_map.end());
+             $$->selection.is_alias_right=$6->is_alias_right;
              delete $6;
            }
            $$->selection.relations.push_back($4);
            std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
            if ($5 != nullptr) {
-                     $$->selection.alias_map.insert(std::pair<std::string, std::string>($5, $4));
+           if($$->selection.alias_map.find($5)==$$->selection.alias_map.end()){
+           $$->selection.alias_map.insert(std::pair<std::string, std::string>($5, $4));
+           }else{
+           $$->selection.is_alias_right=false;
+           }
+
             }
 
            if ($7 != nullptr) {
@@ -926,7 +933,11 @@ rel_list:
         $$ = new InnerJoinSqlNode;
       }
       if($3!=nullptr){
+      if($$->alias_map.find($3)==$$->alias_map.end()){
       $$->alias_map[$3]=$2;
+      }else{
+      $$->is_alias_right=false;
+      }
       }
 
       $$->relations.push_back($2);
@@ -944,8 +955,13 @@ rel_list:
            $$->conditions.insert($$->conditions.end(),$5->begin(),$5->end());
            }
            if($4!=nullptr){
-                 $$->alias_map[$4]=$3;
-                 }
+           if($$->alias_map.find($4)==$$->alias_map.end()){
+           $$->alias_map[$4]=$3;
+           }else{
+           $$->is_alias_right=false;
+           }
+
+           }
 
            free($3);
          }
