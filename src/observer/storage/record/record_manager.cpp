@@ -586,7 +586,7 @@ RC RecordFileScanner::fetch_next_record_in_page()
 
     // 让当前事务探测一下是否访问冲突，或者需要加锁、等锁等操作，由事务自己决定
     rc = trx_->visit_record(table_, next_record_, readonly_);
-    if (rc == RC::RECORD_INVISIBLE) {
+    if (rc == RC::RECORD_INVISIBLE||rc==RC::LOCKED_CONCURRENCY_CONFLICT) {
       // 可以参考MvccTrx，表示当前记录不可见
       // 这种模式仅在 readonly 事务下是有效的
       continue;
