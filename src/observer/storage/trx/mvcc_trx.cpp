@@ -134,6 +134,7 @@ MvccTrx::~MvccTrx()
 
 RC MvccTrx::insert_record(Table *table, Record &record)
 {
+
   Field begin_field;
   Field end_field;
   trx_fields(table, begin_field, end_field);
@@ -213,18 +214,21 @@ RC MvccTrx::update_record(Table *table, Record &record, std::vector<const FieldM
         if(rc==RC::SUCCESS&&rid!=record.rid()){
           Record record1;
           table->get_record(rid,record1);
-          bool same=true;
-          for(int j=0;j<index->field_meta().size();j++){
-            for(int x=index->field_meta()[j].offset();x<index->field_meta()[j].len()+index->field_meta()[j].offset();x++){
-              if(newRecord.data()[x]!=record1.data()[x]){
-                same= false;
+          if(this->visit_record(table,record1, false)==RC::SUCCESS){
+            bool same=true;
+            for(int j=0;j<index->field_meta().size();j++){
+              for(int x=index->field_meta()[j].offset();x<index->field_meta()[j].len()+index->field_meta()[j].offset();x++){
+                if(newRecord.data()[x]!=record1.data()[x]){
+                  same= false;
+                }
               }
             }
+            if(same){
+              LOG_WARN("failed to insert  unique. rc=%s", strrc(rc));
+              return RC::INTERNAL;
+            }
           }
-          if(same){
-            LOG_WARN("failed to insert  unique. rc=%s", strrc(rc));
-            return RC::INTERNAL;
-          }
+
 
         }else{
           break;

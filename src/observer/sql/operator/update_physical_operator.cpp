@@ -159,6 +159,9 @@ RC UpdatePhysicalOperator::next()
       return rc;
     }
   }
+  if(rc!=RC::SUCCESS&&rc!=RC::RECORD_EOF){
+    return rc;
+  }
 
 
   return RC::RECORD_EOF;
