@@ -200,6 +200,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <order_by>         order
 %type <order_by>         order_by_list
 %type <string>              as
+%type <expression>        where_expression
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -1342,7 +1343,7 @@ $$ = new ConditionSqlNode;
                                std::reverse($$->right_value_list.begin(),$$->right_value_list.end());
                                $$->comp = $2;
      }
-     |expression comp_op value{
+     /*|expression comp_op value{
 	$$ = new ConditionSqlNode;
               $$->left_type = EXPR_TYPE;
               $$->left_expr = $1->expression[0];
@@ -1410,7 +1411,7 @@ $$ = new ConditionSqlNode;
 
 
 
-     }
+     }*/
 
     ;
 
