@@ -403,7 +403,17 @@ std::string formatDate(const char *raw_data,const char *format)
   dayEnglish[30] = "30th";
   dayEnglish[31] = "31st";
 
-  const char *sep = "-";
+  const char *sep = "/,.";
+  std::string tmp = format;
+  char *cur_sep;
+  if (tmp.find("/") != std::string::npos) {
+    cur_sep = "/";
+  } else if (tmp.find(",") != std::string::npos) {
+    cur_sep = ",";
+  } else if (tmp.find(".") != std::string::npos) {
+    cur_sep = ".";
+  }
+
   char *p;
   p = strtok(const_cast<char *>(format), sep);
   while(p) {
@@ -421,9 +431,17 @@ std::string formatDate(const char *raw_data,const char *format)
     } else if (strcmp(p, "%d") == 0) {
       if (day < 10) ss << 0;
       ss << day;
+    } else if (strcmp(p, "%z") == 0) {
+      ss << "z";
+    } else if (strcmp(p, "%Z") == 0) {
+      ss << "Z";
+    } else if (strcmp(p, "%n") == 0) {
+      ss << "n";
+    } else if (strcmp(p, "%N") == 0) {
+      ss << "N";
     }
     p = strtok(NULL, sep);
-    if (p) ss << "-";
+    if (p) ss << cur_sep;
   }
   free(p);
   return ss.str();
