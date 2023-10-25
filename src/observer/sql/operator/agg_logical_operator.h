@@ -15,7 +15,7 @@
 class AggLogicalOperator : public LogicalOperator
 {
 public:
-  AggLogicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields);
+  AggLogicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields,std::vector<Expression*>&my_expression);
   virtual ~AggLogicalOperator() = default;
 
   LogicalOperatorType type() const override
@@ -39,6 +39,9 @@ public:
   {
     return fields_;
   }
+  std::vector<Expression*>&my_expressions(){
+    return my_expressions_;
+  }
 
 private:
   //! 投影映射的字段名称
@@ -47,4 +50,6 @@ private:
   //! 不过现在简单处理，就使用字段来描述
   std::vector<RelAttrSqlNode> attributes_;
   std::vector<Field>fields_;
+
+  std::vector<Expression*>my_expressions_;
 };

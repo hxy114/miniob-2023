@@ -23,8 +23,10 @@ See the Mulan PSL v2 for more details. */
 
 
 class Expression;
+class ArithmeticExpr;
 struct SelectSqlNode;
-
+class StringSqlExpr;
+class FieldExpr;
 /**
  * @defgroup SQLParser SQL Parser 
  */
@@ -50,8 +52,15 @@ struct RelAttrSqlNode
   Agg agg;
   bool is_right;
   std::string alias_name;
+  std::string sqlString;
 };
-
+struct ExpressionSqlNode{
+  std::vector<RelAttrSqlNode> relAttrSqlNodes;//for select attr
+  std::vector<Expression*>  expression;//表达式list
+  std::vector<StringSqlExpr*>stringsqlExprs;//for agg
+  std::vector<FieldExpr*>fieldExprs; //for normal select
+  bool is_expression= false;
+};
 /**
  * @brief 描述比较运算符
  * @ingroup SQLParser
@@ -84,6 +93,7 @@ enum ConditionValueType{
   ATTR_TYPE,
   VALUE_LIST_TYPE,
   SUB_SELECT_TYPE,
+  EXPR_TYPE,
 };
 /**
  * @brief 表示一个条件比较
@@ -101,6 +111,9 @@ struct ConditionSqlNode
   RelAttrSqlNode  left_attr;       ///< left-hand side attribute
   SelectSqlNode  * left_select;
   std::vector<Value> left_value_list;
+  Expression* left_expr;
+  std::vector<RelAttrSqlNode> left_relAttrSqlNodes;
+  std::vector<FieldExpr*>left_fieldExprs;
   CompOp          comp;            ///< comparison operator
   ConditionValueType             right_type;   ///< TRUE if right-hand side is an attribute
                                    ///< 1时，操作符右边是属性名，0时，是属性值
@@ -108,6 +121,9 @@ struct ConditionSqlNode
   Value           right_value;     ///< right-hand side value if right_is_attr = FALSE
   SelectSqlNode  * right_select;
   std::vector<Value> right_value_list;
+  Expression* right_expr;
+  std::vector<RelAttrSqlNode> right_relAttrSqlNodes;
+  std::vector<FieldExpr*>right_fieldExprs;
   bool   is_conjunction_or=false;
 
 };
@@ -135,6 +151,10 @@ struct SelectSqlNode
   bool is_sub_select=false;
   std::unordered_map<std::string, std::string>  alias_map; ///< 别名对应关系 alias->relation_name
   bool is_alias_right;
+  bool is_expression_select_attr=false;
+  std::vector<Expression*> attributes_expression;
+  std::vector<StringSqlExpr*>stringsqlExprs;//for agg
+  std::vector<FieldExpr*>fieldExprs; //for normal select
 
 };
 struct InnerJoinSqlNode

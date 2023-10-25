@@ -31,6 +31,7 @@ struct FilterObj
   Value value;
   SelectStmt select;
   std::vector<Value>value_list;
+  Expression *expression;
 
   void init_attr(const Field &field)
   {
@@ -50,6 +51,10 @@ struct FilterObj
   void init_value_list(const std::vector<Value>&value_list){
     filter_type_=VALUE_LIST_TYPE;
     this->value_list.insert(this->value_list.end(),value_list.begin(),value_list.end());
+  }
+  void init_expression( Expression *expression){
+    filter_type_=EXPR_TYPE;
+    this->expression=expression;
   }
 };
 

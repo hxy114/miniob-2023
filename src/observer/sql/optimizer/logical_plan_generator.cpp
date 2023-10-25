@@ -123,7 +123,7 @@ RC LogicalPlanGenerator::create_plan(
   }
 
   if(is_agg){
-    unique_ptr<LogicalOperator> agg_oper(new AggLogicalOperator(all_attributes,all_fields));
+    unique_ptr<LogicalOperator> agg_oper(new AggLogicalOperator(all_attributes,all_fields,select_stmt->expression()));
     if (predicate_oper) {
       if (table_oper) {
         predicate_oper->add_child(std::move(table_oper));
@@ -145,7 +145,7 @@ RC LogicalPlanGenerator::create_plan(
       order_oper= std::move(order_oper_tmp);
     }
 
-    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields, col_alias_map, alias_map));
+    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields, col_alias_map, alias_map,select_stmt->expression()));
     if(order_oper){
       if (predicate_oper) {
         if (table_oper) {
@@ -205,6 +205,8 @@ RC LogicalPlanGenerator::create_plan(
        left=std::unique_ptr<Expression >(static_cast<Expression *>(new SubSelectExpr(filter_obj_left.select)));
       }else if(filter_obj_left.filter_type_==VALUE_LIST_TYPE){
        left=std::unique_ptr<Expression>(static_cast<Expression*>(new ValueListExpr(filter_obj_left.value_list)));
+      }else if(filter_obj_left.filter_type_==EXPR_TYPE){
+       left.reset(filter_obj_left.expression);
       }
 
       if(filter_obj_right.filter_type_==VALUE_TYPE){
@@ -215,6 +217,8 @@ RC LogicalPlanGenerator::create_plan(
        right=std::unique_ptr<Expression >(static_cast<Expression *>(new SubSelectExpr(filter_obj_right.select)));
       }else if(filter_obj_right.filter_type_==VALUE_LIST_TYPE){
        right=std::unique_ptr<Expression>(static_cast<Expression*>(new ValueListExpr(filter_obj_right.value_list)));
+      }else if(filter_obj_right.filter_type_==EXPR_TYPE){
+       right.reset(filter_obj_right.expression);
       }
 
 

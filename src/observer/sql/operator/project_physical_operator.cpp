@@ -35,10 +35,25 @@ RC ProjectPhysicalOperator::open(Trx *trx)
 
 RC ProjectPhysicalOperator::next()
 {
+  RC rc;
   if (children_.empty()) {
     return RC::RECORD_EOF;
   }
-  return children_[0]->next();
+  if(RC::SUCCESS!=(rc=children_[0]->next())){
+    return rc;
+  }else{
+    if(!my_expressions_.empty()){
+      std::vector<Value>values(my_expressions_.size());
+
+      for(int i=0;i<my_expressions_.size();i++){
+        if(my_expressions_[i]->get_value(*children_[0]->current_tuple(),values[i])!=RC::SUCCESS){
+          return RC::INTERNAL;
+        }
+      }
+      valueListTuple_.set_cells(values);
+    }
+    return RC::SUCCESS;
+  }
 }
 
 RC ProjectPhysicalOperator::close()
@@ -50,6 +65,9 @@ RC ProjectPhysicalOperator::close()
 }
 Tuple *ProjectPhysicalOperator::current_tuple()
 {
+  if(my_expressions_.size()>0){
+    return  &valueListTuple_;
+  }
   tuple_.set_tuple(children_[0]->current_tuple());
   return &tuple_;
 }
@@ -79,4 +97,7 @@ void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta
   TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), alias_name.c_str());
   //TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), field_meta->name());
   tuple_.add_cell_spec(spec);
+
 }
+void ProjectPhysicalOperator::add_my_expressions(std::vector<Expression *> &my_expressions)
+{ my_expressions_.insert(my_expressions_.end(),my_expressions.begin(),my_expressions.end());}

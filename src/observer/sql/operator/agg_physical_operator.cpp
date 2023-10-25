@@ -3,7 +3,8 @@
 //
 #include "sql/operator/agg_physical_operator.h"
 #include "common/lang/string.h"
-AggPhysicalOperator::AggPhysicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields): attributes_(attributes),fields_(fields),count_(0),finish_(false)
+AggPhysicalOperator::AggPhysicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields,std::vector<Expression*>&my_expressions)
+    : attributes_(attributes),fields_(fields),count_(0),finish_(false),my_expressions_(my_expressions)
 {}
 
 RC AggPhysicalOperator::open(Trx *trx)
@@ -189,6 +190,19 @@ RC AggPhysicalOperator::next()
         }
         tuple_.set_cells(values);
         finish_= true;
+        if(!my_expressions_.empty()){
+          std::vector<Value>my_values(my_expressions_.size());
+          std::vector<std::string >sql_string;
+          for(int i=0;i<attributes_.size();i++){
+            sql_string.push_back(attributes_[i].sqlString);
+          }
+          ValueListForExpTuple valueListForExpTuple(sql_string);
+          valueListForExpTuple.set_cells(&tuple_);
+          for(int i=0;i<my_expressions_.size();i++){
+            my_expressions_[i]->get_value(valueListForExpTuple,my_values[i]);
+          }
+          expression_tuple_.set_cells(my_values);
+        }
         return RC::SUCCESS;
     }
 
@@ -330,7 +344,10 @@ RC AggPhysicalOperator::close()
 }
 Tuple *AggPhysicalOperator::current_tuple()
 {
-  //tuple_.set_tuple(children_[0]->current_tuple());
+
+  if(!my_expressions_.empty()){
+    return &expression_tuple_;
+  }
   return &tuple_;
 }
 

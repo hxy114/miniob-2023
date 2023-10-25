@@ -84,6 +84,12 @@ public:
   {
     return col_alias_map_;
   }
+  std::vector<Expression*>&expression(){
+    return attributes_expression_;
+  }
+  bool is_expression_select_attr(){
+    return is_expression_select_attr_;
+  }
 
 private:
   std::vector<Field> query_fields_;
@@ -98,4 +104,9 @@ private:
 
   std::unordered_map<std::string, std::string> alias_map_;  //
   std::unordered_map<std::string, std::string> col_alias_map_;
+
+  bool is_expression_select_attr_;
+  std::vector<Expression*> attributes_expression_;
+  //std::vector<StringSqlExpr*>stringsqlExprs;//for agg
+  //std::vector<FieldExpr*>fieldExprs; //for normal select
 };

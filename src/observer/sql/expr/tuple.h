@@ -108,6 +108,7 @@ public:
    * @param[out] cell 返回的cell
    */
   virtual RC find_cell(const TupleCellSpec &spec, Value &cell) const = 0;
+  virtual RC find_cell(const std::string sql_string,Value &cell)const{return RC::INTERNAL;}
 
   virtual std::string to_string() const
   {
@@ -346,7 +347,50 @@ public:
 private:
   const std::vector<std::unique_ptr<Expression>> &expressions_;
 };
+class ValueListForExpTuple:public  Tuple{
+public:
+  ValueListForExpTuple() = default;
+  ValueListForExpTuple(std::vector<std::string> sql_strings):sql_strings_(sql_strings)
+  {}
+  virtual ~ValueListForExpTuple() = default;
 
+  void set_cells( Tuple *cells)
+  {
+    cells_ = cells;
+  }
+
+  virtual int cell_num() const override
+  {
+    return static_cast<int>(sql_strings_.size());
+  }
+
+  virtual RC cell_at(int index, Value &cell) const override
+  {
+    if (index < 0 || index >= cell_num()) {
+      return RC::NOTFOUND;
+    }
+
+    return  cells_->cell_at(index,cell);
+
+  }
+
+  virtual RC find_cell(const TupleCellSpec &spec, Value &cell) const override
+  {
+    return RC::INTERNAL;
+  }
+  virtual RC find_cell(const std::string sql_string,Value &cell)const override{
+    for(int i=0;i<sql_strings_.size();i++){
+      if(sql_string.compare(sql_strings_[i])==0){
+        return cells_->cell_at(i,cell);
+      }
+    }
+    return RC::NOTFOUND;
+  }
+
+private:
+  std::vector<std::string >sql_strings_;
+  Tuple * cells_;
+};
 /**
  * @brief 一些常量值组成的Tuple
  * @ingroup Tuple

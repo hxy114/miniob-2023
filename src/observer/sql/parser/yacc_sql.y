@@ -127,8 +127,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   RelAttrSqlNode *                  rel_attr;
   std::vector<AttrInfoSqlNode> *    attr_infos;
   AttrInfoSqlNode *                 attr_info;
-  Expression *                      expression;
-  std::vector<Expression *> *       expression_list;
+  ExpressionSqlNode *                      expression;
+  std::vector<ExpressionSqlNode *> *       expression_list;
   std::vector<Value> *              value_list;
   std::vector<ConditionSqlNode> *   condition_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
@@ -169,7 +169,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <inner_join_list>     rel_list
 %type <rel_attr_list>       attr_list
 %type <expression>          expression
-%type <expression_list>     expression_list
+%type <expression>          expression_list
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
@@ -609,11 +609,16 @@ update_list:
    }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID as rel_list  where order
+    SELECT expression_list FROM ID as rel_list  where order
          {
            $$ = new ParsedSqlNode(SCF_SELECT);
            if ($2 != nullptr) {
-             $$->selection.attributes.swap(*$2);
+             $$->selection.attributes.swap($2->relAttrSqlNodes);
+             $$->selection.attributes_expression.swap($2->expression);
+             $$->selection.stringsqlExprs.swap($2->stringsqlExprs);
+             $$->selection.fieldExprs.swap($2->fieldExprs);
+             $$->selection.is_expression_select_attr=$2->is_expression;
+             std::reverse($$->selection.attributes_expression.begin(), $$->selection.attributes_expression.end());
              delete $2;
            }
            $$->selection.is_alias_right=true;
@@ -720,8 +725,8 @@ calc_stmt:
     CALC expression_list
     {
       $$ = new ParsedSqlNode(SCF_CALC);
-      std::reverse($2->begin(), $2->end());
-      $$->calc.expressions.swap(*$2);
+      std::reverse($2->expression.begin(), $2->expression.end());
+      $$->calc.expressions.swap($2->expression);
       delete $2;
     }
     ;
@@ -729,44 +734,210 @@ calc_stmt:
 expression_list:
     expression
     {
-      $$ = new std::vector<Expression*>;
-      $$->emplace_back($1);
+      $$ = $1;
     }
     | expression COMMA expression_list
     {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<Expression *>;
+        $$ = new ExpressionSqlNode ;
       }
-      $$->emplace_back($1);
+      $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
+      $$->stringsqlExprs.insert($$->stringsqlExprs.end(),$1->stringsqlExprs.begin(),$1->stringsqlExprs.end());
+      $$->fieldExprs.insert($$->fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+      $$->expression.insert($$->expression.end(),$1->expression.begin(),$1->expression.end());
+      if($1->is_expression){
+      $$->is_expression=true;
+      }
     }
     ;
 expression:
     expression '+' expression {
-      $$ = create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1, $3, sql_string, &@$);
+    $$=new ExpressionSqlNode;
+      $$->expression.push_back(create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1->expression[0], $3->expression[0], sql_string, &@$));
+      $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
+      $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$3->relAttrSqlNodes.begin(),$3->relAttrSqlNodes.end());
+      $$->stringsqlExprs.insert($$->stringsqlExprs.end(),$1->stringsqlExprs.begin(),$1->stringsqlExprs.end());
+      $$->stringsqlExprs.insert($$->stringsqlExprs.end(),$3->stringsqlExprs.begin(),$3->stringsqlExprs.end());
+      $$->fieldExprs.insert($$->fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+            $$->fieldExprs.insert($$->fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
+            $$->is_expression=true;
     }
     | expression '-' expression {
-      $$ = create_arithmetic_expression(ArithmeticExpr::Type::SUB, $1, $3, sql_string, &@$);
+    $$=new ExpressionSqlNode;
+      $$->expression.push_back( create_arithmetic_expression(ArithmeticExpr::Type::SUB, $1->expression[0], $3->expression[0], sql_string, &@$));
+      $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
+      $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$3->relAttrSqlNodes.begin(),$3->relAttrSqlNodes.end());
+      $$->stringsqlExprs.insert($$->stringsqlExprs.end(),$1->stringsqlExprs.begin(),$1->stringsqlExprs.end());
+      $$->stringsqlExprs.insert($$->stringsqlExprs.end(),$3->stringsqlExprs.begin(),$3->stringsqlExprs.end());
+      $$->fieldExprs.insert($$->fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+                  $$->fieldExprs.insert($$->fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
+                  $$->is_expression=true;
     }
     | expression '*' expression {
-      $$ = create_arithmetic_expression(ArithmeticExpr::Type::MUL, $1, $3, sql_string, &@$);
+    $$=new ExpressionSqlNode;
+      $$->expression.push_back( create_arithmetic_expression(ArithmeticExpr::Type::MUL, $1->expression[0], $3->expression[0], sql_string, &@$));
+      $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
+      $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$3->relAttrSqlNodes.begin(),$3->relAttrSqlNodes.end());
+      $$->stringsqlExprs.insert($$->stringsqlExprs.end(),$1->stringsqlExprs.begin(),$1->stringsqlExprs.end());
+      $$->stringsqlExprs.insert($$->stringsqlExprs.end(),$3->stringsqlExprs.begin(),$3->stringsqlExprs.end());
+      $$->fieldExprs.insert($$->fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+                  $$->fieldExprs.insert($$->fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
+                  $$->is_expression=true;
     }
     | expression '/' expression {
-      $$ = create_arithmetic_expression(ArithmeticExpr::Type::DIV, $1, $3, sql_string, &@$);
+    $$=new ExpressionSqlNode;
+      $$->expression.push_back(create_arithmetic_expression(ArithmeticExpr::Type::DIV, $1->expression[0], $3->expression[0], sql_string, &@$));
+      $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
+      $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$3->relAttrSqlNodes.begin(),$3->relAttrSqlNodes.end());
+      $$->stringsqlExprs.insert($$->stringsqlExprs.end(),$1->stringsqlExprs.begin(),$1->stringsqlExprs.end());
+      $$->stringsqlExprs.insert($$->stringsqlExprs.end(),$3->stringsqlExprs.begin(),$3->stringsqlExprs.end());
+      $$->fieldExprs.insert($$->fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+                  $$->fieldExprs.insert($$->fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
+                  $$->is_expression=true;
     }
     | LBRACE expression RBRACE {
       $$ = $2;
-      $$->set_name(token_name(sql_string, &@$));
+      $$->expression[0]->set_name(token_name(sql_string, &@$));
+      $$->is_expression=true;
     }
     | '-' expression %prec UMINUS {
-      $$ = create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, $2, nullptr, sql_string, &@$);
+    $$=new ExpressionSqlNode;
+    $$->expression.push_back( create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, $2->expression[0], nullptr, sql_string, &@$));
+    $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$2->relAttrSqlNodes.begin(),$2->relAttrSqlNodes.end());
+    $$->stringsqlExprs.insert($$->stringsqlExprs.end(),$2->stringsqlExprs.begin(),$2->stringsqlExprs.end());
+    $$->fieldExprs.insert($$->fieldExprs.end(),$2->fieldExprs.begin(),$2->fieldExprs.end());
+    $$->is_expression=true;
     }
     | value {
-      $$ = new ValueExpr(*$1);
-      $$->set_name(token_name(sql_string, &@$));
+      $$=new ExpressionSqlNode;
+      $$->expression.push_back( new ValueExpr(*$1));
+      $$->expression[0]->set_name(token_name(sql_string, &@$));
+      $$->is_expression=false;
       delete $1;
     }
+    |ID as{
+    $$=new ExpressionSqlNode;
+           auto relAttrSqlNode = new RelAttrSqlNode;
+           relAttrSqlNode->attribute_name = $1;
+           relAttrSqlNode->agg=NO_AGG;
+           relAttrSqlNode->is_right=true;
+           if($2!=nullptr){
+           relAttrSqlNode->alias_name=$2;
+           }
+    relAttrSqlNode->sqlString=token_name(sql_string, &@$);
+    $$->relAttrSqlNodes.push_back(*relAttrSqlNode);
+    auto fieldExpr=new FieldExpr;
+    fieldExpr->set_name(token_name(sql_string, &@$));
+    $$->expression.push_back(fieldExpr);
+    $$->fieldExprs.push_back(fieldExpr);
+    $$->is_expression=false;
+           free($1);
+         }
+         |agg LBRACE arg_list RBRACE as{
+         $$=new ExpressionSqlNode;
+         auto relAttrSqlNode = new RelAttrSqlNode;
+              if($3==nullptr||$3->size()!=1){
+              relAttrSqlNode->is_right=false;
+              }else{
+              relAttrSqlNode->attribute_name = (*$3)[0];
+              relAttrSqlNode->is_right=true;
+              relAttrSqlNode->agg=$1;
+              }
+              if($5!=nullptr){
+               relAttrSqlNode->alias_name=$5;
+              }
+              relAttrSqlNode->sqlString=token_name(sql_string, &@$);
+              $$->relAttrSqlNodes.push_back(*relAttrSqlNode);
+                  auto stringSqlExpr=new StringSqlExpr;
+                  stringSqlExpr->set_name(token_name(sql_string, &@$));
+                  $$->expression.push_back(stringSqlExpr);
+                  $$->stringsqlExprs.push_back(stringSqlExpr);
+                  $$->is_expression=false;
+               free($3);
+
+              }
+         | ID DOT ID as{
+         $$=new ExpressionSqlNode;
+         auto relAttrSqlNode = new RelAttrSqlNode;
+           relAttrSqlNode->relation_name  = $1;
+           relAttrSqlNode->attribute_name = $3;
+           relAttrSqlNode->agg=NO_AGG;
+           relAttrSqlNode->is_right=true;
+           if($4!=nullptr){
+           relAttrSqlNode->alias_name=$4;
+           }
+           relAttrSqlNode->sqlString=token_name(sql_string, &@$);
+               $$->relAttrSqlNodes.push_back(*relAttrSqlNode);
+               auto fieldExpr=new FieldExpr;
+               fieldExpr->set_name(token_name(sql_string, &@$));
+               $$->expression.push_back(fieldExpr);
+               $$->fieldExprs.push_back(fieldExpr);
+               $$->is_expression=false;
+           free($1);
+           free($3);
+         }
+         | agg LBRACE ID DOT ID RBRACE as{
+         $$=new ExpressionSqlNode;
+                  auto relAttrSqlNode = new RelAttrSqlNode;
+                    relAttrSqlNode->relation_name  = $3;
+                    relAttrSqlNode->attribute_name = $5;
+                    relAttrSqlNode->is_right=true;
+                    relAttrSqlNode->agg=$1;
+                    if($7!=nullptr){
+                          relAttrSqlNode->alias_name=$7;
+                          }
+                    relAttrSqlNode->sqlString=token_name(sql_string, &@$);
+                    $$->relAttrSqlNodes.push_back(*relAttrSqlNode);
+                    auto stringSqlExpr=new StringSqlExpr;
+                    stringSqlExpr->set_name(token_name(sql_string, &@$));
+                    $$->expression.push_back(stringSqlExpr);
+                    $$->stringsqlExprs.push_back(stringSqlExpr);
+                    $$->is_expression=false;
+                    free($3);
+                    free($5);
+         }
+         |'*' as {
+         $$=new ExpressionSqlNode;
+         auto relAttrSqlNode = new RelAttrSqlNode;
+               relAttrSqlNode->relation_name  = "";
+               relAttrSqlNode->attribute_name = "*";
+               if($2!=nullptr){
+               relAttrSqlNode->is_right=false;
+               }else{
+               relAttrSqlNode->is_right=true;
+               }
+               relAttrSqlNode->agg=NO_AGG;
+               relAttrSqlNode->sqlString=token_name(sql_string, &@$);
+               $$->relAttrSqlNodes.push_back(*relAttrSqlNode);
+               auto fieldExpr=new FieldExpr;
+               fieldExpr->set_name(token_name(sql_string, &@$));
+               $$->expression.push_back(fieldExpr);
+               $$->fieldExprs.push_back(fieldExpr);
+               $$->is_expression=false;
+
+             }
+         |ID DOT '*' as {
+         $$=new ExpressionSqlNode;
+         auto relAttrSqlNode = new RelAttrSqlNode;
+               relAttrSqlNode->relation_name  = $1;
+               relAttrSqlNode->attribute_name = "*";
+               if($4!=nullptr){
+               relAttrSqlNode->is_right=false;
+               }else{
+               relAttrSqlNode->is_right=true;
+               }
+
+               relAttrSqlNode->agg=NO_AGG;
+               relAttrSqlNode->sqlString=token_name(sql_string, &@$);
+               $$->relAttrSqlNodes.push_back(*relAttrSqlNode);
+               auto fieldExpr=new FieldExpr;
+               fieldExpr->set_name(token_name(sql_string, &@$));
+               $$->expression.push_back(fieldExpr);
+               $$->fieldExprs.push_back(fieldExpr);
+               $$->is_expression=false;
+         }
     ;
 
 select_attr:
@@ -1170,6 +1341,75 @@ $$ = new ConditionSqlNode;
                                $$->right_value_list.push_back(*$4);
                                std::reverse($$->right_value_list.begin(),$$->right_value_list.end());
                                $$->comp = $2;
+     }
+     |expression comp_op value{
+	$$ = new ConditionSqlNode;
+              $$->left_type = EXPR_TYPE;
+              $$->left_expr = $1->expression[0];
+              $$->left_relAttrSqlNodes.insert($$->left_relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
+              $$->left_fieldExprs.insert($$->left_fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+              $$->right_type = VALUE_TYPE;
+              $$->right_value = *$3;
+              $$->comp = $2;
+
+
+              delete $3;
+     }
+     |expression comp_op rel_attr{
+     $$ = new ConditionSqlNode;
+                   $$->left_type = EXPR_TYPE;
+                   $$->left_expr = $1->expression[0];
+                   $$->left_relAttrSqlNodes.insert($$->left_relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
+                   $$->left_fieldExprs.insert($$->left_fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+                   $$->right_type = ATTR_TYPE;
+                   $$->right_attr = *$3;
+                   $$->comp = $2;
+
+
+                   delete $3;
+
+     }
+     |value comp_op expression{
+       $$ = new ConditionSqlNode;
+              $$->right_type = EXPR_TYPE;
+              $$->right_expr = $3->expression[0];
+              $$->right_relAttrSqlNodes.insert($$->right_relAttrSqlNodes.end(),$3->relAttrSqlNodes.begin(),$3->relAttrSqlNodes.end());
+              $$->right_fieldExprs.insert($$->right_fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
+              $$->left_type = VALUE_TYPE;
+              $$->left_value = *$1;
+              $$->comp = $2;
+
+
+              delete $1;
+     }
+     |rel_attr comp_op expression{
+     $$ = new ConditionSqlNode;
+                        $$->right_type = EXPR_TYPE;
+                        $$->right_expr = $3->expression[0];
+                        $$->right_relAttrSqlNodes.insert($$->right_relAttrSqlNodes.end(),$3->relAttrSqlNodes.begin(),$3->relAttrSqlNodes.end());
+                        $$->right_fieldExprs.insert($$->right_fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
+                        $$->left_type = ATTR_TYPE;
+                        $$->left_attr = *$1;
+                        $$->comp = $2;
+
+
+                        delete $1;
+
+     }
+     |expression comp_op expression{
+     $$ = new ConditionSqlNode;
+                             $$->right_type = EXPR_TYPE;
+                             $$->right_expr = $3->expression[0];
+                             $$->right_relAttrSqlNodes.insert($$->right_relAttrSqlNodes.end(),$3->relAttrSqlNodes.begin(),$3->relAttrSqlNodes.end());
+                             $$->right_fieldExprs.insert($$->right_fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
+                             $$->left_type = EXPR_TYPE;
+                             $$->left_expr = $1->expression[0];
+                             $$->left_relAttrSqlNodes.insert($$->left_relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
+                             $$->left_fieldExprs.insert($$->left_fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+                             $$->comp = $2;
+
+
+
      }
 
     ;

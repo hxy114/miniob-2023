@@ -175,6 +175,26 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::string defa
       FilterObj filter_obj;
       filter_obj.init_value_list(condition.left_value_list);
       filter_unit->set_left(filter_obj);
+    }else if(condition.left_type==EXPR_TYPE){
+      for(int i=0;i<condition.left_relAttrSqlNodes.size();i++){
+        Table *table = nullptr;
+        const FieldMeta *field = nullptr;
+        rc = get_table_and_field(db, default_table, tables, top_tables,condition.left_relAttrSqlNodes[i], table, field);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("cannot find attr");
+          return rc;
+        }
+        for(int j=0;j<condition.left_fieldExprs.size();j++){
+          if(condition.left_fieldExprs[j]->name().compare(condition.left_relAttrSqlNodes[i].sqlString)==0){
+            condition.left_fieldExprs[j]->setField(Field(table,field));
+          }
+
+        }
+      }
+
+      FilterObj filter_obj;
+      filter_obj.init_expression(condition.left_expr);
+      filter_unit->set_left(filter_obj);
     }
 
     if (condition.right_type==ATTR_TYPE) {
@@ -222,7 +242,28 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::string defa
       FilterObj filter_obj;
       filter_obj.init_value_list(condition.right_value_list);
       filter_unit->set_right(filter_obj);
+    }else if(condition.right_type==EXPR_TYPE){
+      for(int i=0;i<condition.right_relAttrSqlNodes.size();i++){
+        Table *table = nullptr;
+        const FieldMeta *field = nullptr;
+        rc = get_table_and_field(db, default_table, tables, top_tables,condition.right_relAttrSqlNodes[i], table, field);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("cannot find attr");
+          return rc;
+        }
+        for(int j=0;j<condition.right_fieldExprs.size();j++){
+          if(condition.right_fieldExprs[j]->name().compare(condition.right_relAttrSqlNodes[i].sqlString)==0){
+            condition.right_fieldExprs[j]->setField(Field(table,field));
+          }
+
+        }
+      }
+
+      FilterObj filter_obj;
+      filter_obj.init_expression(condition.right_expr);
+      filter_unit->set_right(filter_obj);
     }
+
   }
 
 

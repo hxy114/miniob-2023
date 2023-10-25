@@ -46,6 +46,7 @@ enum class ExprType
   ARITHMETIC,   ///< 算术运算
   SUBSELECT,
   VALUELIST,
+  STRINGSQL,
 };
 
 /**
@@ -118,7 +119,7 @@ public:
 
   ExprType type() const override { return ExprType::FIELD; }
   AttrType value_type() const override { return field_.attr_type(); }
-
+  void setField(Field field){field_=field;}
   Field &field() { return field_; }
 
   const Field &field() const { return field_; }
@@ -132,7 +133,27 @@ public:
 private:
   Field field_;
 };
+/**
+ * @brief 字段表达式
+ * @ingroup Expression
+ */
+class StringSqlExpr : public Expression
+{
+public:
+  StringSqlExpr() = default;
 
+  virtual ~StringSqlExpr() = default;
+  ExprType type() const override { return ExprType::STRINGSQL; }
+  void setType(AttrType attrType){type_=attrType;}
+  AttrType value_type() const override { return type_; }
+
+
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+private:
+  AttrType type_;
+
+};
 /**
  * @brief 常量值表达式
  * @ingroup Expression
