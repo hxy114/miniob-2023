@@ -502,9 +502,17 @@ value:
       $$ = new Value((int)$1);
       @$ = @1;
     }
+    |"-" NUMBER {
+      $$ = new Value(-(int)$2);
+      @$ = @1;
+    }
     |FLOAT {
       $$ = new Value((float)$1);
       @$ = @1;
+    }
+    |"-" FLOAT {
+    $$ = new Value(-(float)$2);
+    @$ = @1;
     }
     |SSS {
       char *tmp = common::substr($1,1,strlen($1)-2);
