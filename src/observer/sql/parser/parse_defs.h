@@ -60,6 +60,7 @@ struct ExpressionSqlNode{
   std::vector<StringSqlExpr*>stringsqlExprs;//for agg
   std::vector<FieldExpr*>fieldExprs; //for normal select
   bool is_expression= false;
+  bool is_value=false;
 };
 /**
  * @brief 描述比较运算符

@@ -815,6 +815,7 @@ expression:
       $$->expression.push_back( new ValueExpr(*$1));
       $$->expression[0]->set_name(token_name(sql_string, &@$));
       $$->is_expression=false;
+      $$->is_value=true;
       delete $1;
     }
     |ID as{
@@ -833,6 +834,7 @@ expression:
     $$->expression.push_back(fieldExpr);
     $$->fieldExprs.push_back(fieldExpr);
     $$->is_expression=false;
+    $$->is_value=false;
            free($1);
          }
          |agg LBRACE arg_list RBRACE as{
@@ -855,6 +857,7 @@ expression:
                   $$->expression.push_back(stringSqlExpr);
                   $$->stringsqlExprs.push_back(stringSqlExpr);
                   $$->is_expression=false;
+                  $$->is_value=false;
                free($3);
 
               }
@@ -875,6 +878,7 @@ expression:
                $$->expression.push_back(fieldExpr);
                $$->fieldExprs.push_back(fieldExpr);
                $$->is_expression=false;
+               $$->is_value=false;
            free($1);
            free($3);
          }
@@ -895,6 +899,7 @@ expression:
                     $$->expression.push_back(stringSqlExpr);
                     $$->stringsqlExprs.push_back(stringSqlExpr);
                     $$->is_expression=false;
+                    $$->is_value=false;
                     free($3);
                     free($5);
          }
@@ -916,7 +921,7 @@ expression:
                $$->expression.push_back(fieldExpr);
                $$->fieldExprs.push_back(fieldExpr);
                $$->is_expression=false;
-
+               $$->is_value=false;
              }
          |ID DOT '*' as {
          $$=new ExpressionSqlNode;
@@ -937,6 +942,7 @@ expression:
                $$->expression.push_back(fieldExpr);
                $$->fieldExprs.push_back(fieldExpr);
                $$->is_expression=false;
+               $$->is_value=false;
          }
     ;
 
@@ -1413,14 +1419,35 @@ $$ = new ConditionSqlNode;
      }*/
      expression comp_op expression{
           $$ = new ConditionSqlNode;
-          $$->right_type = EXPR_TYPE;
-          $$->right_expr = $3->expression[0];
-          $$->right_relAttrSqlNodes.insert($$->right_relAttrSqlNodes.end(),$3->relAttrSqlNodes.begin(),$3->relAttrSqlNodes.end());
-          $$->right_fieldExprs.insert($$->right_fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
+          if($1->is_expression==false){
+          if($1->is_value==true){
+          $$->left_type=VALUE_TYPE;
+          $$->left_value=((ValueExpr*)($1->expression[0]))->get_value();
+          }else{
+             $$->left_type = ATTR_TYPE;
+             $$->left_attr = $1->relAttrSqlNodes[0];
+          }
+          }else{
           $$->left_type = EXPR_TYPE;
           $$->left_expr = $1->expression[0];
           $$->left_relAttrSqlNodes.insert($$->left_relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
           $$->left_fieldExprs.insert($$->left_fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+          }
+
+          if($3->is_expression==false){
+          if($3->is_value==true){
+          $$->right_type=VALUE_TYPE;
+          $$->right_value=((ValueExpr*)($3->expression[0]))->get_value();
+          }else{
+          $$->right_type = ATTR_TYPE;
+          $$->right_attr = $3->relAttrSqlNodes[0];
+          }
+          }else{
+          $$->right_type = EXPR_TYPE;
+          $$->right_expr = $3->expression[0];
+          $$->right_relAttrSqlNodes.insert($$->right_relAttrSqlNodes.end(),$3->relAttrSqlNodes.begin(),$3->relAttrSqlNodes.end());
+          $$->right_fieldExprs.insert($$->right_fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
+          }
           $$->comp = $2;
 
 
@@ -1428,10 +1455,21 @@ $$ = new ConditionSqlNode;
      }
      | expression comp_op LBRACE select_stmt RBRACE{
           $$ = new ConditionSqlNode;
+          if($1->is_expression==false){
+          if($1->is_value==true){
+          $$->left_type=VALUE_TYPE;
+          $$->left_value=((ValueExpr*)($1->expression[0]))->get_value();
+          }else{
+                 $$->left_type = ATTR_TYPE;
+                 $$->left_attr = $1->relAttrSqlNodes[0];
+          }
+          }else{
           $$->left_type = EXPR_TYPE;
           $$->left_expr = $1->expression[0];
           $$->left_relAttrSqlNodes.insert($$->left_relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
           $$->left_fieldExprs.insert($$->left_fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+          }
+
           $$->right_type = SUB_SELECT_TYPE;
           $$->right_select = &($4->selection);
           $$->right_select->is_sub_select=true;
@@ -1440,10 +1478,23 @@ $$ = new ConditionSqlNode;
      }
      | LBRACE select_stmt RBRACE comp_op expression{
           $$ = new ConditionSqlNode;
+
+          if($5->is_expression==false){
+          if($5->is_value==true){
+          $$->right_type=VALUE_TYPE;
+          $$->right_value=((ValueExpr*)($5->expression[0]))->get_value();
+          }else{
+          $$->right_type = ATTR_TYPE;
+          $$->right_attr = $5->relAttrSqlNodes[0];
+          }
+          }else{
           $$->right_type = EXPR_TYPE;
           $$->right_expr = $5->expression[0];
           $$->right_relAttrSqlNodes.insert($$->right_relAttrSqlNodes.end(),$5->relAttrSqlNodes.begin(),$5->relAttrSqlNodes.end());
           $$->right_fieldExprs.insert($$->right_fieldExprs.end(),$5->fieldExprs.begin(),$5->fieldExprs.end());
+          }
+
+
           $$->left_type = SUB_SELECT_TYPE;
           $$->left_select = &($2->selection);
           $$->left_select->is_sub_select=true;
@@ -1479,10 +1530,22 @@ $$ = new ConditionSqlNode;
      }
      |expression comp_op LBRACE value COMMA value value_list RBRACE{
          $$ = new ConditionSqlNode;
+
+         if($1->is_expression==false){
+         if($1->is_value==true){
+         $$->left_type=VALUE_TYPE;
+         $$->left_value=((ValueExpr*)($1->expression[0]))->get_value();
+         }else{
+         $$->left_type = ATTR_TYPE;
+         $$->left_attr = $1->relAttrSqlNodes[0];
+         }
+         }else{
          $$->left_type = EXPR_TYPE;
          $$->left_expr = $1->expression[0];
          $$->left_relAttrSqlNodes.insert($$->left_relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
          $$->left_fieldExprs.insert($$->left_fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+         }
+
          $$->right_type = VALUE_LIST_TYPE;
          if($7!=nullptr){
          $$->right_value_list.insert($$->right_value_list.end(),$7->begin(),$7->end());
