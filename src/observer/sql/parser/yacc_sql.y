@@ -660,6 +660,7 @@ select_attr:
       attr.relation_name  = "";
       attr.attribute_name = "*";
       attr.agg=NO_AGG;
+      attr.func=NO_FUNC;
       $$->emplace_back(attr);
     }
     | rel_attr attr_list {
@@ -708,6 +709,7 @@ rel_attr:
       $$ = new RelAttrSqlNode;
       $$->attribute_name = $1;
       $$->agg=NO_AGG;
+      $$->func = NO_FUNC;
       $$->is_right=true;
       /* 不需要考虑列的别名重复 */
       $$->alias_name = $2;
@@ -718,6 +720,7 @@ rel_attr:
       $$->relation_name  = $1;
       $$->attribute_name = $3;
       $$->agg=NO_AGG;
+      $$->func = NO_FUNC;
       $$->is_right=true;
       /* 不需要考虑列的别名重复 */
       $$->alias_name = $4;
@@ -730,6 +733,7 @@ rel_attr:
          $$->is_right=false;
          }else{
          $$->attribute_name = (*$3)[0];
+         $$->func = NO_FUNC;
          $$->agg=$1;
          }
          $$->alias_name = $5;
@@ -742,6 +746,7 @@ rel_attr:
         $$->is_right=true;
         $$->alias_name = $7;
         $$->agg=$1;
+        $$->func = NO_FUNC;
         free($3);
         free($5);
     }
@@ -751,7 +756,8 @@ rel_attr:
       $$->attribute_name = $3->attribute_name;
       $$->is_right=true;
       $$->alias_name = $5;
-      /*$$->func = LENGTH_FUNC;*/
+      $$->agg = NO_AGG;
+      $$->func = LENGTH_FUNC;
       $$->lengthparam = *$3;
     }
     | ROUND_func LBRACE round_func_param RBRACE as {
@@ -760,6 +766,7 @@ rel_attr:
       $$->attribute_name = $3->attribute_name;
       $$->is_right=true;
       $$->alias_name = $5;
+      $$->agg = NO_AGG;
       $$->func = ROUND_FUNC;
       $$->roundparam = *$3;
     }
@@ -769,6 +776,7 @@ rel_attr:
       $$->attribute_name = $3->attribute_name;
       $$->is_right=true;
       $$->alias_name = $5;
+      $$->agg = NO_AGG;
       $$->func = FORMAT_FUNC;
       $$->formatparam = *$3;
     }
@@ -841,7 +849,7 @@ length_func_param:
     free($1);
     free($3);
   }
-  | SSS {
+  | PATTERN {
     $$ = new LengthParam;
 
     char *tmp = common::substr($1,1,strlen($1)-2);
@@ -890,7 +898,7 @@ round_func_param:
   ;
 /* Function date_format()的参数匹配 */
 format_func_param:
-  ID COMMA SSS {
+  ID COMMA PATTERN {
     $$ = new FormatParam;
     $$->attribute_name = $1;
 
@@ -899,7 +907,7 @@ format_func_param:
     free(tmp); 
     free($1);
   }
-  | ID DOT ID COMMA SSS {
+  | ID DOT ID COMMA PATTERN {
     $$ = new FormatParam;
     $$->relation_name = $1;
     $$->attribute_name = $3;
@@ -910,7 +918,7 @@ format_func_param:
     free($1);
     free($3);
   }
-  | DATE COMMA SSS {
+  | DATE COMMA PATTERN {
     $$ = new FormatParam;
 
     char *tmp = common::substr($1,1,strlen($1)-2);

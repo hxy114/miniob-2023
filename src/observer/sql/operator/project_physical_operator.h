@@ -28,10 +28,19 @@ public:
 
   virtual ~ProjectPhysicalOperator() = default;
 
-  void add_expressions(std::vector<std::unique_ptr<Expression>> &&expressions)
+  void add_expressions(std::vector<std::unique_ptr<Expression>> &expressions)
   {
-    
+    expressions_ = std::move(expressions);
   }
+  // void add_attributes(std::vector<RelAttrSqlNode> &attributes)
+  // {
+  //   attributes_ = attributes;
+  // }
+  void add_all_expressions(std::vector<std::unique_ptr<Expression>> &all_expressions)
+  {
+    all_expressions_ = std::move(all_expressions);
+  } 
+
   void add_projection(const Table *table, const FieldMeta *field, const std::unordered_map<std::string, std::string> &col_alias_map, const std::unordered_map<std::string, std::string> &alias_map);
 
   PhysicalOperatorType type() const override
@@ -52,4 +61,8 @@ public:
 
 private:
   ProjectTuple tuple_;
+  std::vector<std::unique_ptr<Expression>> expressions_; //用于无表查询Function
+  bool withoutTable_EOF_flag = false;
+  ValueListTuple generate_tuple_;
+  std::vector<std::unique_ptr<Expression>> all_expressions_; //所有select attr的表达式
 };

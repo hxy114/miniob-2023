@@ -29,17 +29,45 @@ struct FilterObj
   bool is_attr;
   Field field;
   Value value;
+  Func func_;
+  LengthParam lengthparam_;
+  RoundParam roundparam_;
+  FormatParam formatparam_;
 
   void init_attr(const Field &field)
   {
     is_attr = true;
     this->field = field;
+    this->func_ = NO_FUNC;
   }
 
   void init_value(const Value &value)
   {
     is_attr = false;
     this->value = value;
+    this->func_ = NO_FUNC;
+  }
+
+  void init_func(const Field &field, const Func &func, const LengthParam &lengthparam)
+  {
+    is_attr = true;
+    this->field = field;
+    this->func_ = LENGTH_FUNC;
+    this->lengthparam_ = lengthparam;
+  }
+  void init_func(const Field &field, const Func &func, const RoundParam &roundparam)
+  {
+    is_attr = true;
+    this->field = field;
+    this->func_ = ROUND_FUNC;
+    this->roundparam_ = roundparam;
+  }
+  void init_func(const Field &field, const Func &func, const FormatParam &formatparam)
+  {
+    is_attr = true;
+    this->field = field;
+    this->func_ = FORMAT_FUNC;
+    this->formatparam_ = formatparam;
   }
 };
 

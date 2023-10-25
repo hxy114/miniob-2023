@@ -25,17 +25,44 @@ PredicatePhysicalOperator::PredicatePhysicalOperator(std::unique_ptr<Expression>
 
 RC PredicatePhysicalOperator::open(Trx *trx)
 {
-  if (children_.size() != 1) {
+  // if (children_.size() != 1) {
+  //   LOG_WARN("predicate operator must has one child");
+  //   return RC::INTERNAL;
+  // }
+
+  if (children_.size() == 1) {
+    return children_[0]->open(trx);
+  } else if (children_.size() == 0) {
+    return RC::SUCCESS;
+  } else {
     LOG_WARN("predicate operator must has one child");
     return RC::INTERNAL;
   }
-
-  return children_[0]->open(trx);
+  
 }
 
 RC PredicatePhysicalOperator::next()
 {
   RC rc = RC::SUCCESS;
+
+  if (children_.size() == 0) {
+    // 无表查询  select Func() where;
+    if (withoutTable_EOF_flag) {
+      return RC::RECORD_EOF; //此处有点冗余，上一层判断了
+    }
+    Tuple *tuple = new RowTuple();
+    Value value;
+    rc = expression_->get_value(*tuple, value);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+    if (value.get_boolean()) {
+      withoutTable_EOF_flag = true;
+      return rc;
+    }
+    return RC::RECORD_EOF;
+  }
+
   PhysicalOperator *oper = children_.front().get();
 
   while (RC::SUCCESS == (rc = oper->next())) {
@@ -61,11 +88,17 @@ RC PredicatePhysicalOperator::next()
 
 RC PredicatePhysicalOperator::close()
 {
-  children_[0]->close();
+  if (children_.size() == 1) {
+    children_[0]->close();
+  }
+  
   return RC::SUCCESS;
 }
 
 Tuple *PredicatePhysicalOperator::current_tuple()
 {
-  return children_[0]->current_tuple();
+  if (children_.size() == 1) {
+    return children_[0]->current_tuple();
+  }
+  return nullptr;
 }

@@ -28,12 +28,12 @@ class Expression;
  * @defgroup SQLParser SQL Parser 
  */
 enum Agg{
+  NO_AGG,
   MAX_AGG,
   MIN_AGG,
   AVG_AGG,
   COUNT_AGG,
   SUM_AGG,
-  NO_AGG,
 };
 enum Func{
   NO_FUNC,     ///< 默认值

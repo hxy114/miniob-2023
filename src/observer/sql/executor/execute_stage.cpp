@@ -96,26 +96,96 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
       }else{
         bool with_table_name = select_stmt->tables().size() > 1;
 
-        for (const Field &field : select_stmt->query_fields()) {
-          std::string field_name = field.field_name();
-          if (select_stmt->col_alias_map().find(field_name) != select_stmt->col_alias_map().end()) {
-            field_name = select_stmt->col_alias_map()[field_name];
-          }
-
-          if (with_table_name) {
-            std::string table_name = field.table_name();
-            for (auto it = alias_map.begin(); it!=alias_map.end(); it++) {
-              if (it->second == table_name) {
-                table_name = it->first;
-                break;
-              }
-            }
-
-            schema.append_cell(table_name.c_str(), field_name.c_str());
-          } else {
-            schema.append_cell(field_name.c_str());
+        bool has_asterisk = false;
+        for (RelAttrSqlNode rel_attr:select_stmt->attributes()) {
+          if (rel_attr.attribute_name == "*") {
+            has_asterisk = true;
           }
         }
+
+        if (has_asterisk) {
+          for (const Field &field : select_stmt->query_fields()) {
+            std::string field_name = field.field_name();
+            if (select_stmt->col_alias_map().find(field_name) != select_stmt->col_alias_map().end()) {
+              field_name = select_stmt->col_alias_map()[field_name];
+            }
+
+            if (with_table_name) {
+              std::string table_name = field.table_name();
+              for (auto it = alias_map.begin(); it!=alias_map.end(); it++) {
+                if (it->second == table_name) {
+                  table_name = it->first;
+                  break;
+                }
+              }
+
+              schema.append_cell(table_name.c_str(), field_name.c_str());
+            } else {
+              schema.append_cell(field_name.c_str());
+            }
+          }
+        } else {
+          for (RelAttrSqlNode rel_attr:select_stmt->attributes()) {
+            if (!rel_attr.alias_name.empty()) {
+              schema.append_cell(rel_attr.alias_name.c_str());
+            } else if (rel_attr.func != NO_FUNC) {
+              switch (rel_attr.func)
+              {
+              case LENGTH_FUNC:
+                {
+                  string name;
+                  if (!rel_attr.attribute_name.empty()) {
+                    name = rel_attr.relation_name.empty() ? rel_attr.attribute_name: 
+                              rel_attr.relation_name+"."+rel_attr.attribute_name;
+                  } else {
+                    name = "\"" + rel_attr.lengthparam.raw_data.get_string() + "\"";
+                  }
+                  name = "length(" + name + ")";
+                  schema.append_cell(name.c_str());
+                } break;
+              case ROUND_FUNC:
+                {
+                  string name;
+                  if (!rel_attr.attribute_name.empty()) {
+                    name = rel_attr.relation_name.empty() ? rel_attr.attribute_name: 
+                              rel_attr.relation_name+"."+rel_attr.attribute_name;
+                  } else {
+                    name = rel_attr.roundparam.raw_data.to_string();
+                  }
+                  if (rel_attr.roundparam.bits.length() != 0) {
+                    name = name + "," + rel_attr.roundparam.bits.to_string();
+                  }
+                  name = "round(" + name + ")";
+                  schema.append_cell(name.c_str());
+                } break;
+              case FORMAT_FUNC:
+                {
+                  string name;
+                  if (!rel_attr.attribute_name.empty()) {
+                    name = rel_attr.relation_name.empty() ? rel_attr.attribute_name: 
+                              rel_attr.relation_name+"."+rel_attr.attribute_name;
+                  } else {
+                    name = "\"" + rel_attr.formatparam.raw_data.get_string() + "\"";
+                  }
+                  name = name + "," + "\"" + rel_attr.formatparam.format.get_string() + "\"";
+                  name = "date_format(" + name + ")";
+                  schema.append_cell(name.c_str());
+                } break;
+              default:
+                break;
+              }
+            } else {
+              std::string field_name = rel_attr.attribute_name;
+              if (with_table_name) {
+                std::string table_name = rel_attr.relation_name;
+                schema.append_cell(table_name.c_str(), field_name.c_str());
+              } else {
+                schema.append_cell(field_name.c_str());
+              }
+            }
+          }
+        }
+        
       }
     } break;
 

@@ -16,6 +16,85 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/project_physical_operator.h"
 #include "storage/record/record.h"
 #include "storage/table/table.h"
+#include <cmath>
+
+std::string formatDate3(const char *raw_data,const char *format)
+{
+  int year=0, month=0, day=0;
+  int i;
+  for (i=0; i<10&&raw_data[i]!='-';i++) {
+    year=year*10+(raw_data[i]-'0');
+  }
+  i++;
+  for(;i<10&&raw_data[i]!='-';i++){
+    month=month*10+(raw_data[i]-'0');
+  }
+  i++;
+  for(;i<10&&raw_data[i]!='\0';i++){
+    day=day*10+(raw_data[i]-'0');
+  }
+
+  std::stringstream ss;
+  const std::string monthEnglish[] = {"","January", "February", "March", "April", "May", "June",
+                              "July", "August", "September", "October", "November", "December"};
+  std::unordered_map<int, std::string> dayEnglish;
+  dayEnglish[1] = "1st";
+  dayEnglish[2] = "2nd";
+  dayEnglish[3] = "3rd";
+  dayEnglish[4] = "4th";
+  dayEnglish[5] = "5th";
+  dayEnglish[6] = "6th";
+  dayEnglish[7] = "7th";
+  dayEnglish[8] = "8th";
+  dayEnglish[9] = "9th";
+  dayEnglish[10] = "10th";
+  dayEnglish[11] = "11th";
+  dayEnglish[12] = "12th";
+  dayEnglish[13] = "13th";
+  dayEnglish[14] = "14th";
+  dayEnglish[15] = "15th";
+  dayEnglish[16] = "16th";
+  dayEnglish[17] = "17th";
+  dayEnglish[18] = "18th";
+  dayEnglish[19] = "19th";
+  dayEnglish[20] = "20th";
+  dayEnglish[21] = "21st";
+  dayEnglish[22] = "22nd";
+  dayEnglish[23] = "23rd";
+  dayEnglish[24] = "24th";
+  dayEnglish[25] = "25th";
+  dayEnglish[26] = "26th";
+  dayEnglish[27] = "27th";
+  dayEnglish[28] = "28th";
+  dayEnglish[29] = "29th";
+  dayEnglish[30] = "30th";
+  dayEnglish[31] = "31st";
+
+  const char *sep = "-";
+  char *p;
+  p = strtok(const_cast<char *>(format), sep);
+  while(p) {
+    if (strcmp(p, "%Y") == 0) {
+      ss << year;
+    } else if (strcmp(p, "%y") == 0) {
+      ss << (year % 100);
+    } else if (strcmp(p, "%M") == 0) {
+      ss << monthEnglish[month];
+    } else if (strcmp(p, "%m") == 0) {
+      if (month < 10) ss << 0;
+      ss << month;
+    } else if (strcmp(p, "%D") == 0) {
+      ss << dayEnglish[day];
+    } else if (strcmp(p, "%d") == 0) {
+      if (day < 10) ss << 0;
+      ss << day;
+    }
+    p = strtok(NULL, sep);
+    if (p) ss << "-";
+  }
+  free(p);
+  return ss.str();
+}
 
 RC ProjectPhysicalOperator::open(Trx *trx)
 {
@@ -35,9 +114,22 @@ RC ProjectPhysicalOperator::open(Trx *trx)
 
 RC ProjectPhysicalOperator::next()
 {
-  if (children_.empty()) {
+  if (children_.empty() && expressions_.size() == 0) {
     return RC::RECORD_EOF;
+  } else if (expressions_.size() != 0) {
+    // 无表查询
+    if (withoutTable_EOF_flag) {
+      return RC::RECORD_EOF;
+    }
+    withoutTable_EOF_flag = true;
+    if (children_.empty()) {
+      // 无where
+      return RC::SUCCESS; //直接在current_tuple()返回计算结果
+    } else {
+      return children_[0]->next();
+    }
   }
+
   return children_[0]->next();
 }
 
@@ -50,8 +142,88 @@ RC ProjectPhysicalOperator::close()
 }
 Tuple *ProjectPhysicalOperator::current_tuple()
 {
-  tuple_.set_tuple(children_[0]->current_tuple());
-  return &tuple_;
+  // if (expressions_.size() == 0 && !children_.empty()) {
+  //   tuple_.set_tuple(children_[0]->current_tuple());
+    
+  //   return &tuple_;
+  // }
+
+  if (expressions_.size() == 0 && !children_.empty()) {
+    // select length(name), name from t;
+    std::vector<Value> values;
+    values.resize(all_expressions_.size());
+    Tuple *cur_tuple = children_[0]->current_tuple();
+    for (int i=0; i<all_expressions_.size(); ++i) {
+      Value v;
+      all_expressions_[i]->get_value(*cur_tuple, v);
+      values[i] = v;
+      // switch (all_expressions_[i]->type())
+      // {
+      
+      // case ExprType::FIELD:
+      // {
+        
+
+      // } break;
+      // case ExprType::VALUE:
+      // {
+
+      // } break;
+      // case ExprType::FUNC:
+      // {
+
+      // } break;
+      // default:
+      //   break;
+      // }
+    }
+    
+    generate_tuple_.set_cells(values);
+    return &generate_tuple_;
+  }
+  
+  // 无表查询
+  if (expressions_.size() != 0) {
+    std::vector<Value> values;
+    values.resize(expressions_.size());
+    for (int i=0; i<expressions_.size(); ++i) {
+      FuncExpr *expr = static_cast<FuncExpr *>(expressions_[i].get());
+      Value v;
+      switch (expr->func())
+      {
+      case LENGTH_FUNC:
+      {
+        v.set_int(expr->lengthparam().raw_data.get_string().size());
+      } break;
+      case ROUND_FUNC:
+      {
+        float raw_data = expr->roundparam().raw_data.get_float();
+        if (expr->roundparam().bits.length() == 0) {
+          // 只有一个参数
+          v.set_int(round(raw_data));
+        } else if (expr->roundparam().bits.attr_type() != INTS) {
+          break;
+        } else {
+          raw_data *= pow(10, expr->roundparam().bits.get_int());
+          v.set_float(round(raw_data)/pow(10, expr->roundparam().bits.get_int()));
+        }
+      } break;
+      case FORMAT_FUNC:
+      {
+        std::string raw_date = expr->formatparam().raw_data.get_string();
+        std::string format = expr->formatparam().format.get_string();
+        v.set_string(formatDate3(raw_date.c_str(), format.c_str()).c_str());
+      } break;
+      
+      default:
+        break;
+      }
+      values[i] = v;
+    }
+    generate_tuple_.set_cells(values);
+    return &generate_tuple_;
+  }
+  
 }
 
 void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta *field_meta, const std::unordered_map<std::string, std::string> &col_alias_map, const std::unordered_map<std::string, std::string> &alias_map)

@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/expression.h"
 #include "sql/expr/tuple.h"
 #include <regex>
+#include <cmath>
 using namespace std;
 
 RC FieldExpr::get_value(const Tuple &tuple, Value &value) const
@@ -347,4 +348,122 @@ RC ArithmeticExpr::try_get_value(Value &value) const
   }
 
   return calc_value(left_value, right_value, value);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+std::string formatDate(const char *raw_data,const char *format)
+{
+  int year=0, month=0, day=0;
+  int i;
+  for (i=0; i<10&&raw_data[i]!='-';i++) {
+    year=year*10+(raw_data[i]-'0');
+  }
+  i++;
+  for(;i<10&&raw_data[i]!='-';i++){
+    month=month*10+(raw_data[i]-'0');
+  }
+  i++;
+  for(;i<10&&raw_data[i]!='\0';i++){
+    day=day*10+(raw_data[i]-'0');
+  }
+
+  std::stringstream ss;
+  const std::string monthEnglish[] = {"","January", "February", "March", "April", "May", "June",
+                              "July", "August", "September", "October", "November", "December"};
+  std::unordered_map<int, std::string> dayEnglish;
+  dayEnglish[1] = "1st";
+  dayEnglish[2] = "2nd";
+  dayEnglish[3] = "3rd";
+  dayEnglish[4] = "4th";
+  dayEnglish[5] = "5th";
+  dayEnglish[6] = "6th";
+  dayEnglish[7] = "7th";
+  dayEnglish[8] = "8th";
+  dayEnglish[9] = "9th";
+  dayEnglish[10] = "10th";
+  dayEnglish[11] = "11th";
+  dayEnglish[12] = "12th";
+  dayEnglish[13] = "13th";
+  dayEnglish[14] = "14th";
+  dayEnglish[15] = "15th";
+  dayEnglish[16] = "16th";
+  dayEnglish[17] = "17th";
+  dayEnglish[18] = "18th";
+  dayEnglish[19] = "19th";
+  dayEnglish[20] = "20th";
+  dayEnglish[21] = "21st";
+  dayEnglish[22] = "22nd";
+  dayEnglish[23] = "23rd";
+  dayEnglish[24] = "24th";
+  dayEnglish[25] = "25th";
+  dayEnglish[26] = "26th";
+  dayEnglish[27] = "27th";
+  dayEnglish[28] = "28th";
+  dayEnglish[29] = "29th";
+  dayEnglish[30] = "30th";
+  dayEnglish[31] = "31st";
+
+  const char *sep = "-";
+  char *p;
+  p = strtok(const_cast<char *>(format), sep);
+  while(p) {
+    if (strcmp(p, "%Y") == 0) {
+      ss << year;
+    } else if (strcmp(p, "%y") == 0) {
+      ss << (year % 100);
+    } else if (strcmp(p, "%M") == 0) {
+      ss << monthEnglish[month];
+    } else if (strcmp(p, "%m") == 0) {
+      if (month < 10) ss << 0;
+      ss << month;
+    } else if (strcmp(p, "%D") == 0) {
+      ss << dayEnglish[day];
+    } else if (strcmp(p, "%d") == 0) {
+      if (day < 10) ss << 0;
+      ss << day;
+    }
+    p = strtok(NULL, sep);
+    if (p) ss << "-";
+  }
+  free(p);
+  return ss.str();
+}
+
+RC FuncExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  Value tuple_value;
+  tuple.find_cell(TupleCellSpec(table_name(), field_name()), tuple_value);
+  switch (func_)
+  {
+  case LENGTH_FUNC:
+  {
+    int length = tuple_value.get_string().size();
+    value.set_int(length);
+  } break;
+  case ROUND_FUNC:
+  {
+    float tuple_float = tuple_value.get_float();
+    if (roundparam_.bits.length() == 0) {
+      // 只有一个参数
+      value.set_int(round(tuple_float));
+    } else if (roundparam_.bits.attr_type() != INTS) {
+      LOG_ERROR("round() Func bits error.");
+      return RC::VARIABLE_NOT_VALID;
+    } else {
+      tuple_float *= pow(10, roundparam_.bits.get_int());
+      value.set_float(round(tuple_float)/pow(10, roundparam_.bits.get_int()));
+    }
+  } break;
+  case FORMAT_FUNC:
+  {
+    string tuple_date = tuple_value.get_string();
+    string format = formatparam_.format.get_string();
+    value.set_string(formatDate(tuple_date.c_str(), format.c_str()).c_str());
+  } break;
+  
+  default:
+    return RC::UNIMPLENMENT;
+  }
+
+  return RC::SUCCESS;
 }

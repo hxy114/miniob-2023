@@ -138,7 +138,9 @@ RC LogicalPlanGenerator::create_plan(
     return RC::SUCCESS;
   }else{
     std::unordered_map<std::string, std::string> col_alias_map = select_stmt->col_alias_map();
-    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields, col_alias_map, alias_map));
+    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields, col_alias_map, alias_map, select_stmt->all_expressions()));
+
+    bool without_table_query = table_oper ? false : true;  //无表查询判断
     if (predicate_oper) {
       if (table_oper) {
         predicate_oper->add_child(std::move(table_oper));
@@ -148,6 +150,35 @@ RC LogicalPlanGenerator::create_plan(
       if (table_oper) {
         project_oper->add_child(std::move(table_oper));
       }
+    }
+    
+    // 无表查询
+    if (without_table_query) {
+      for (auto &attribute:all_attributes) {
+        if (attribute.func == NO_FUNC) {
+          return RC::SQL_SYNTAX;
+        }
+        Expression* expr;
+        switch (attribute.func)
+        {
+        case LENGTH_FUNC:
+          expr = new FuncExpr(Field(), attribute.func, attribute.lengthparam);
+          break;
+        case ROUND_FUNC:
+          expr = new FuncExpr(Field(), attribute.func, attribute.roundparam);
+          break;
+        case FORMAT_FUNC:
+          expr = new FuncExpr(Field(), attribute.func, attribute.formatparam);
+          break;
+        default:
+          return RC::UNIMPLENMENT;
+        }
+
+        unique_ptr<Expression> cur(expr);
+        
+        project_oper->add_expression(std::move(cur));
+      }
+      
     }
 
     logical_operator.swap(project_oper);
@@ -166,15 +197,56 @@ RC LogicalPlanGenerator::create_plan(
     const FilterObj &filter_obj_left = filter_unit->left();
     const FilterObj &filter_obj_right = filter_unit->right();
 
-    unique_ptr<Expression> left(filter_obj_left.is_attr
-                                         ? static_cast<Expression *>(new FieldExpr(filter_obj_left.field))
-                                         : static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
-
-    unique_ptr<Expression> right(filter_obj_right.is_attr
-                                          ? static_cast<Expression *>(new FieldExpr(filter_obj_right.field))
-                                          : static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
-
-    ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
+    Expression *left;
+    if (filter_obj_left.is_attr) {
+      if (filter_obj_left.func_ != NO_FUNC) {
+        switch (filter_obj_left.func_)
+        {
+        case LENGTH_FUNC:
+          left = static_cast<Expression *>(new FuncExpr(filter_obj_left.field,LENGTH_FUNC,filter_obj_left.lengthparam_));
+          break;
+        case ROUND_FUNC:
+          left = static_cast<Expression *>(new FuncExpr(filter_obj_left.field,ROUND_FUNC,filter_obj_left.roundparam_));
+          break;
+        case FORMAT_FUNC:
+          left = static_cast<Expression *>(new FuncExpr(filter_obj_left.field,FORMAT_FUNC,filter_obj_left.formatparam_));
+          break;
+        default:
+          return RC::UNIMPLENMENT;
+        }
+      } else {
+        left = static_cast<Expression *>(new FieldExpr(filter_obj_left.field));
+      }
+    } else {
+      left = static_cast<Expression *>(new ValueExpr(filter_obj_left.value));   
+    }
+    Expression *right;
+    if (filter_obj_right.is_attr) {
+      if (filter_obj_right.func_ != NO_FUNC) {
+        switch (filter_obj_right.func_)
+        {
+        case LENGTH_FUNC:
+          right = static_cast<Expression *>(new FuncExpr(filter_obj_right.field,LENGTH_FUNC,filter_obj_right.lengthparam_));
+          break;
+        case ROUND_FUNC:
+          right = static_cast<Expression *>(new FuncExpr(filter_obj_right.field,ROUND_FUNC,filter_obj_right.roundparam_));
+          break;
+        case FORMAT_FUNC:
+          right = static_cast<Expression *>(new FuncExpr(filter_obj_right.field,FORMAT_FUNC,filter_obj_right.formatparam_));
+          break;
+        default:
+          return RC::UNIMPLENMENT;
+        }
+      } else {
+        right = static_cast<Expression *>(new FieldExpr(filter_obj_right.field));
+      }
+    } else {
+      right = static_cast<Expression *>(new ValueExpr(filter_obj_right.value));   
+    }
+    unique_ptr<Expression> cur_left(left);
+    unique_ptr<Expression> cur_right(right);
+    
+    ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(cur_left), std::move(cur_right));
     cmp_exprs.emplace_back(cmp_expr);
   }
 

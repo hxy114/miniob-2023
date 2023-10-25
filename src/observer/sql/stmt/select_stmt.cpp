@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/string.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include <cmath>
 
 SelectStmt::~SelectStmt()
 {
@@ -34,6 +35,94 @@ static void wildcard_fields(Table *table, std::vector<Field> &field_metas)
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
     field_metas.push_back(Field(table, table_meta.field(i)));
   }
+}
+
+static void wildcard_expressions(Table *table, std::vector<std::unique_ptr<Expression>> &all_expressions)
+{
+  const TableMeta &table_meta = table->table_meta();
+  const int field_num = table_meta.field_num();
+  for (int i = table_meta.sys_field_num(); i < field_num; i++) {
+    // std::unique_ptr<Expression>(static_cast<Expression *>(new FieldExpr(table, table_meta.field(i))));
+    all_expressions.emplace_back(new FieldExpr(table, table_meta.field(i)));
+  }
+}
+
+static std::string formatDate4(const char *raw_data,const char *format)
+{
+  int year=0, month=0, day=0;
+  int i;
+  for (i=0; i<10&&raw_data[i]!='-';i++) {
+    year=year*10+(raw_data[i]-'0');
+  }
+  i++;
+  for(;i<10&&raw_data[i]!='-';i++){
+    month=month*10+(raw_data[i]-'0');
+  }
+  i++;
+  for(;i<10&&raw_data[i]!='\0';i++){
+    day=day*10+(raw_data[i]-'0');
+  }
+
+  std::stringstream ss;
+  const std::string monthEnglish[] = {"","January", "February", "March", "April", "May", "June",
+                              "July", "August", "September", "October", "November", "December"};
+  std::unordered_map<int, std::string> dayEnglish;
+  dayEnglish[1] = "1st";
+  dayEnglish[2] = "2nd";
+  dayEnglish[3] = "3rd";
+  dayEnglish[4] = "4th";
+  dayEnglish[5] = "5th";
+  dayEnglish[6] = "6th";
+  dayEnglish[7] = "7th";
+  dayEnglish[8] = "8th";
+  dayEnglish[9] = "9th";
+  dayEnglish[10] = "10th";
+  dayEnglish[11] = "11th";
+  dayEnglish[12] = "12th";
+  dayEnglish[13] = "13th";
+  dayEnglish[14] = "14th";
+  dayEnglish[15] = "15th";
+  dayEnglish[16] = "16th";
+  dayEnglish[17] = "17th";
+  dayEnglish[18] = "18th";
+  dayEnglish[19] = "19th";
+  dayEnglish[20] = "20th";
+  dayEnglish[21] = "21st";
+  dayEnglish[22] = "22nd";
+  dayEnglish[23] = "23rd";
+  dayEnglish[24] = "24th";
+  dayEnglish[25] = "25th";
+  dayEnglish[26] = "26th";
+  dayEnglish[27] = "27th";
+  dayEnglish[28] = "28th";
+  dayEnglish[29] = "29th";
+  dayEnglish[30] = "30th";
+  dayEnglish[31] = "31st";
+
+  const char *sep = "-";
+  char *p;
+  p = strtok(const_cast<char *>(format), sep);
+  while(p) {
+    if (strcmp(p, "%Y") == 0) {
+      ss << year;
+    } else if (strcmp(p, "%y") == 0) {
+      ss << (year % 100);
+    } else if (strcmp(p, "%M") == 0) {
+      ss << monthEnglish[month];
+    } else if (strcmp(p, "%m") == 0) {
+      if (month < 10) ss << 0;
+      ss << month;
+    } else if (strcmp(p, "%D") == 0) {
+      ss << dayEnglish[day];
+    } else if (strcmp(p, "%d") == 0) {
+      if (day < 10) ss << 0;
+      ss << day;
+    }
+    p = strtok(NULL, sep);
+    if (p) ss << "-";
+  }
+  free(p);
+  return ss.str();
 }
 
 RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
@@ -87,7 +176,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
   // 为列的别名生成别名映射关系
   std::unordered_map<std::string, std::string> col_alias_map;
   for (auto &attribute : select_sql.attributes) {
-    if (!attribute.alias_name.empty()) {
+    if (!attribute.alias_name.empty() && !attribute.attribute_name.empty()) {
       col_alias_map.insert(std::pair<std::string, std::string>(attribute.attribute_name, attribute.alias_name));
     }
   }
@@ -189,13 +278,16 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
   }else{
     // collect query fields in `select` statement
     std::vector<Field> query_fields;
+    std::vector<std::unique_ptr<Expression>> all_expressions;
     for (int i = static_cast<int>(select_sql.attributes.size()) - 1; i >= 0; i--) {
       const RelAttrSqlNode &relation_attr = select_sql.attributes[i];
 
       if (common::is_blank(relation_attr.relation_name.c_str()) &&
           0 == strcmp(relation_attr.attribute_name.c_str(), "*")) {
+        
         for (Table *table : tables) {
           wildcard_fields(table, query_fields);
+          wildcard_expressions(table, all_expressions);
         }
 
       } else if (!common::is_blank(relation_attr.relation_name.c_str())) {
@@ -209,6 +301,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
           }
           for (Table *table : tables) {
             wildcard_fields(table, query_fields);
+            wildcard_expressions(table, all_expressions);
           }
         } else {
           auto iter = table_map.find(table_name);
@@ -220,6 +313,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
           Table *table = iter->second;
           if (0 == strcmp(field_name, "*")) {
             wildcard_fields(table, query_fields);
+            wildcard_expressions(table, all_expressions);
           } else {
             const FieldMeta *field_meta = table->table_meta().field(field_name);
             if (nullptr == field_meta) {
@@ -228,9 +322,64 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
             }
 
             query_fields.push_back(Field(table, field_meta));
+            if (relation_attr.func == NO_FUNC) {
+              all_expressions.emplace_back(new FieldExpr(table, field_meta));
+            } else {
+              switch (relation_attr.func)
+              {
+              case LENGTH_FUNC:
+                all_expressions.emplace_back(new FuncExpr(Field(table, field_meta), LENGTH_FUNC, relation_attr.lengthparam));
+                break;
+              case ROUND_FUNC:
+                all_expressions.emplace_back(new FuncExpr(Field(table, field_meta), ROUND_FUNC, relation_attr.roundparam));
+                break;
+              case FORMAT_FUNC:
+                all_expressions.emplace_back(new FuncExpr(Field(table, field_meta), FORMAT_FUNC, relation_attr.formatparam));
+                break;
+              default:
+                return RC::UNIMPLENMENT;
+              }
+              
+            }
           }
         }
       } else {
+        if (relation_attr.func != NO_FUNC && relation_attr.attribute_name.empty()) {
+          // 输入为原始字符串  e.g. select length('this is a string') as len [from t];
+          Value v;
+          switch (relation_attr.func)
+          {
+          case LENGTH_FUNC:
+          {
+            v.set_int(relation_attr.lengthparam.raw_data.get_string().size());
+          } break;
+          case ROUND_FUNC:
+          {
+            float raw_data = relation_attr.roundparam.raw_data.get_float();
+            if (relation_attr.roundparam.bits.length() == 0) {
+              // 只有一个参数
+              v.set_int(round(raw_data));
+            } else if (relation_attr.roundparam.bits.attr_type() != INTS) {
+              return RC::SQL_SYNTAX;
+            } else {
+              raw_data *= pow(10, relation_attr.roundparam.bits.get_int());
+              v.set_float(round(raw_data)/pow(10, relation_attr.roundparam.bits.get_int()));
+            }
+          } break;
+          case FORMAT_FUNC:
+          {
+            std::string raw_date = relation_attr.formatparam.raw_data.get_string();
+            std::string format = relation_attr.formatparam.format.get_string();
+            v.set_string(formatDate4(raw_date.c_str(), format.c_str()).c_str());
+          } break;
+          
+          default:
+            return RC::UNIMPLENMENT;
+          }
+          all_expressions.emplace_back(new ValueExpr(v));
+          continue;
+        }
+
         if (tables.size() != 1) {
           LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
           return RC::SCHEMA_FIELD_MISSING;
@@ -244,6 +393,24 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
         }
 
         query_fields.push_back(Field(table, field_meta));
+        if (relation_attr.func == NO_FUNC) {
+          all_expressions.emplace_back(new FieldExpr(table, field_meta));
+        } else {
+          switch (relation_attr.func)
+          {
+          case LENGTH_FUNC:
+            all_expressions.emplace_back(new FuncExpr(Field(table, field_meta), LENGTH_FUNC, relation_attr.lengthparam));
+            break;
+          case ROUND_FUNC:
+            all_expressions.emplace_back(new FuncExpr(Field(table, field_meta), ROUND_FUNC, relation_attr.roundparam));
+            break;
+          case FORMAT_FUNC:
+            all_expressions.emplace_back(new FuncExpr(Field(table, field_meta), FORMAT_FUNC, relation_attr.formatparam));
+            break;
+          default:
+            return RC::UNIMPLENMENT;
+          }          
+        }
       }
     }
     LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), query_fields.size());
@@ -279,6 +446,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
     select_stmt->query_fields_.swap(query_fields);
     select_stmt->filter_stmt_ = filter_stmt;
     select_stmt->is_agg_= false;
+    select_stmt->all_expressions_ = std::move(all_expressions);
     stmt = select_stmt;
     return RC::SUCCESS;
 

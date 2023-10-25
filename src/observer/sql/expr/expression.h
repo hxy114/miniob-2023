@@ -43,6 +43,7 @@ enum class ExprType
   COMPARISON,   ///< 需要做比较的表达式
   CONJUNCTION,  ///< 多个表达式使用同一种关系(AND或OR)来联结
   ARITHMETIC,   ///< 算术运算
+  FUNC,         ///< 用于Function计算值
 };
 
 /**
@@ -129,6 +130,57 @@ public:
 private:
   Field field_;
 };
+
+/**
+ * @brief 函数表达式
+ * @ingroup Expression
+ */
+class FuncExpr : public Expression 
+{
+public:
+  FuncExpr() = default;
+
+  FuncExpr(const Field &field, Func func, LengthParam lengthparam) : field_(field),func_(LENGTH_FUNC),lengthparam_(lengthparam)
+  {}
+  FuncExpr(const Field &field, Func func, RoundParam roundparam) : field_(field),func_(ROUND_FUNC),roundparam_(roundparam)
+  {}
+  FuncExpr(const Field &field, Func func, FormatParam formatparam) : field_(field),func_(FORMAT_FUNC),formatparam_(formatparam)
+  {}
+
+  virtual ~FuncExpr() = default;
+
+  ExprType type() const override { return ExprType::FUNC; }
+  AttrType value_type() const override { 
+    if (func_ == LENGTH_FUNC) return INTS;
+    else if (func_ == ROUND_FUNC && roundparam_.bits.length() == 0) return INTS;
+    else if (func_ == ROUND_FUNC && roundparam_.bits.length() != 0) return FLOATS;
+    else if (func_ == FORMAT_FUNC) return CHARS; 
+  }
+
+  Field &field() { return field_; }
+
+  const Field &field() const { return field_; }
+
+  LengthParam lengthparam() { return lengthparam_; }
+  RoundParam roundparam() { return roundparam_; }
+  FormatParam formatparam() { return formatparam_; }
+
+  const char *table_name() const { return field_.table_name(); }
+
+  const char *field_name() const { return field_.field_name(); }
+
+  Func func() const { return func_; }
+
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+private:
+  Field field_;
+  Func func_;
+  LengthParam lengthparam_;
+  RoundParam roundparam_;
+  FormatParam formatparam_;
+};
+
 
 /**
  * @brief 常量值表达式

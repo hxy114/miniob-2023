@@ -72,6 +72,10 @@ public:
   {
     return col_alias_map_;
   }
+  std::vector<std::unique_ptr<Expression>> &all_expressions()
+  {
+    return all_expressions_;
+  }
 
 private:
   std::vector<Field> query_fields_;
@@ -79,6 +83,7 @@ private:
   FilterStmt *filter_stmt_ = nullptr;
   bool is_agg_;
   std::vector<RelAttrSqlNode> attributes_;
-  std::unordered_map<std::string, std::string> alias_map_;  // 
-  std::unordered_map<std::string, std::string> col_alias_map_;
+  std::unordered_map<std::string, std::string> alias_map_;  // 别名-->表名
+  std::unordered_map<std::string, std::string> col_alias_map_; // 列名-->别名
+  std::vector<std::unique_ptr<Expression>> all_expressions_;  // select attributes对应的每个表达式，用于project
 };
