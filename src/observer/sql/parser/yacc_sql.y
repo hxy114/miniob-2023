@@ -200,7 +200,6 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <order_by>         order
 %type <order_by>         order_by_list
 %type <string>              as
-%type <expression>        where_expression
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -1183,7 +1182,7 @@ condition_list:
          }
     ;
 condition:
-    rel_attr comp_op value
+    /*rel_attr comp_op value
     {
       $$ = new ConditionSqlNode;
       $$->left_type = ATTR_TYPE;
@@ -1343,7 +1342,7 @@ $$ = new ConditionSqlNode;
                                std::reverse($$->right_value_list.begin(),$$->right_value_list.end());
                                $$->comp = $2;
      }
-     /*|expression comp_op value{
+     |expression comp_op value{
 	$$ = new ConditionSqlNode;
               $$->left_type = EXPR_TYPE;
               $$->left_expr = $1->expression[0];
@@ -1412,6 +1411,87 @@ $$ = new ConditionSqlNode;
 
 
      }*/
+     expression comp_op expression{
+          $$ = new ConditionSqlNode;
+          $$->right_type = EXPR_TYPE;
+          $$->right_expr = $3->expression[0];
+          $$->right_relAttrSqlNodes.insert($$->right_relAttrSqlNodes.end(),$3->relAttrSqlNodes.begin(),$3->relAttrSqlNodes.end());
+          $$->right_fieldExprs.insert($$->right_fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
+          $$->left_type = EXPR_TYPE;
+          $$->left_expr = $1->expression[0];
+          $$->left_relAttrSqlNodes.insert($$->left_relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
+          $$->left_fieldExprs.insert($$->left_fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+          $$->comp = $2;
+
+
+
+     }
+     | expression comp_op LBRACE select_stmt RBRACE{
+          $$ = new ConditionSqlNode;
+          $$->left_type = EXPR_TYPE;
+          $$->left_expr = $1->expression[0];
+          $$->left_relAttrSqlNodes.insert($$->left_relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
+          $$->left_fieldExprs.insert($$->left_fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+          $$->right_type = SUB_SELECT_TYPE;
+          $$->right_select = &($4->selection);
+          $$->right_select->is_sub_select=true;
+          $$->comp = $2;
+
+     }
+     | LBRACE select_stmt RBRACE comp_op expression{
+          $$ = new ConditionSqlNode;
+          $$->right_type = EXPR_TYPE;
+          $$->right_expr = $5->expression[0];
+          $$->right_relAttrSqlNodes.insert($$->right_relAttrSqlNodes.end(),$5->relAttrSqlNodes.begin(),$5->relAttrSqlNodes.end());
+          $$->right_fieldExprs.insert($$->right_fieldExprs.end(),$5->fieldExprs.begin(),$5->fieldExprs.end());
+          $$->left_type = SUB_SELECT_TYPE;
+          $$->left_select = &($2->selection);
+          $$->left_select->is_sub_select=true;
+          $$->comp = $4;
+
+     }
+     |LBRACE select_stmt RBRACE comp_op LBRACE select_stmt RBRACE{
+         $$ = new ConditionSqlNode;
+         $$->left_type = SUB_SELECT_TYPE;
+         $$->left_select =  &($2->selection);
+         $$->left_select->is_sub_select=true;
+         $$->right_type = SUB_SELECT_TYPE;
+         $$->right_select =  &($6->selection);
+         $$->right_select->is_sub_select=true;
+         $$->comp = $4;
+
+
+     }
+     |EXISTS LBRACE select_stmt RBRACE{
+              $$ = new ConditionSqlNode;
+              $$->right_type = SUB_SELECT_TYPE;
+              $$->right_select =  &($3->selection);
+              $$->right_select->is_sub_select=true;
+              $$->comp = EXISTS_OP;
+
+     }
+     | NOT EXISTS LBRACE select_stmt RBRACE{
+         $$ = new ConditionSqlNode;
+         $$->right_type = SUB_SELECT_TYPE;
+         $$->right_select =  &($4->selection);
+         $$->right_select->is_sub_select=true;
+         $$->comp = NOT_EXISTS_OP;
+     }
+     |expression comp_op LBRACE value COMMA value value_list RBRACE{
+         $$ = new ConditionSqlNode;
+         $$->left_type = EXPR_TYPE;
+         $$->left_expr = $1->expression[0];
+         $$->left_relAttrSqlNodes.insert($$->left_relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
+         $$->left_fieldExprs.insert($$->left_fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
+         $$->right_type = VALUE_LIST_TYPE;
+         if($7!=nullptr){
+         $$->right_value_list.insert($$->right_value_list.end(),$7->begin(),$7->end());
+          }
+          $$->right_value_list.push_back(*$6);
+          $$->right_value_list.push_back(*$4);
+          std::reverse($$->right_value_list.begin(),$$->right_value_list.end());
+          $$->comp = $2;
+     }
 
     ;
 
