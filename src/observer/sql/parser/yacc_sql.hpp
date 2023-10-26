@@ -120,13 +120,14 @@ extern int yydebug;
     LENGTH_func = 321,             /* LENGTH_func  */
     ROUND_func = 322,              /* ROUND_func  */
     FORMAT_func = 323,             /* FORMAT_func  */
-    NUMBER = 324,                  /* NUMBER  */
-    FLOAT = 325,                   /* FLOAT  */
-    ID = 326,                      /* ID  */
-    SSS = 327,                     /* SSS  */
-    DATE = 328,                    /* DATE  */
-    PATTERN = 329,                 /* PATTERN  */
-    UMINUS = 330                   /* UMINUS  */
+    TEXT_T = 324,                  /* TEXT_T  */
+    NUMBER = 325,                  /* NUMBER  */
+    FLOAT = 326,                   /* FLOAT  */
+    ID = 327,                      /* ID  */
+    SSS = 328,                     /* SSS  */
+    DATE = 329,                    /* DATE  */
+    PATTERN = 330,                 /* PATTERN  */
+    UMINUS = 331                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -135,7 +136,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 125 "yacc_sql.y"
+#line 126 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   ConditionSqlNode *                condition;
@@ -162,7 +163,7 @@ union YYSTYPE
   RoundParam *                      round_func_param;
   FormatParam *                     format_func_param;
 
-#line 166 "yacc_sql.hpp"
+#line 167 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
