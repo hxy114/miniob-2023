@@ -18,6 +18,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include <cmath>
+#include "utils.h"
 
 FilterStmt::~FilterStmt()
 {
@@ -92,6 +94,63 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
   return RC::SUCCESS;
 }
 
+RC function_calc(const RelAttrSqlNode &attr, Value &value)
+{
+  switch (attr.func)
+  {
+  case LENGTH_FUNC:
+  {
+    LengthParam param = attr.lengthparam;
+    if (param.raw_data.attr_type() != CHARS) {
+      LOG_ERROR("length() Func input mismatch.");
+      return RC::VARIABLE_NOT_VALID;
+    }
+
+    value.set_int(param.raw_data.get_string().size());
+  } break;
+
+  case ROUND_FUNC:
+  {
+    // round()函数可以只有一个参数，表示数据取整;也可以有两个参数，第二个参数表示保留的小数位数
+    RoundParam param = attr.roundparam;
+    if (param.raw_data.attr_type() != FLOATS) {
+      LOG_ERROR("round() Func input mismatch.");
+      return RC::VARIABLE_NOT_VALID;
+    }
+
+    float raw_data = param.raw_data.get_float();
+    if (param.bits.length() == 0) {
+      // 只有一个参数
+      value.set_int(round(raw_data));
+    } else if (param.bits.attr_type() != INTS) {
+      // 有两个参数，但第二个参数类型不对
+      LOG_ERROR("round() Func bits error.");
+      return RC::VARIABLE_NOT_VALID;
+    } else {
+      // 有两个参数，且格式正确
+      raw_data *= pow(10, param.bits.get_int());
+      value.set_float(round(raw_data)/pow(10, param.bits.get_int()));
+    }
+  } break;
+
+  case FORMAT_FUNC:
+  {
+    FormatParam param = attr.formatparam;
+    if (param.raw_data.attr_type() != DATES || param.format.attr_type() != CHARS) {
+      LOG_ERROR("date_format() Func input mismatch.");
+      return RC::VARIABLE_NOT_VALID;
+    }
+    std::string raw_data = param.raw_data.get_string();
+    std::string format = param.format.get_string();
+    value.set_date(formatDate(raw_data.c_str(), format.c_str()).c_str());
+  } break;
+  
+  default:
+    return RC::UNIMPLENMENT;
+  }
+  return RC::SUCCESS;
+}
+
 RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::string default_table_alas,std::unordered_map<std::string, Table *> *tables,
     const ConditionSqlNode &condition, std::unordered_map<std::string, Table *>top_tables,FilterUnit *&filter_unit)
 {
@@ -131,15 +190,46 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::string defa
 
   }else{
     if (condition.left_type==ATTR_TYPE) {
-      Table *table = nullptr;
-      const FieldMeta *field = nullptr;
-      rc = get_table_and_field(db, default_table, tables, top_tables,condition.left_attr, table, field);
-      if (rc != RC::SUCCESS) {
-        LOG_WARN("cannot find attr");
-        return rc;
-      }
       FilterObj filter_obj;
-      filter_obj.init_attr(Field(table, field));
+      if (condition.left_attr.func != NO_FUNC && condition.left_attr.attribute_name.empty()) {
+        Value v;
+        rc = function_calc(condition.left_attr, v);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("function_calc false.");
+          return rc;
+        }
+
+        filter_obj.init_value(v);
+      } else {
+        Table *table = nullptr;
+        const FieldMeta *field = nullptr;
+        rc = get_table_and_field(db, default_table, tables, top_tables,condition.left_attr, table, field);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("cannot find attr");
+          return rc;
+        }
+
+        if (condition.left_attr.func != NO_FUNC) {
+          switch (condition.left_attr.func)
+          {
+          case LENGTH_FUNC:
+            filter_obj.init_func(Field(table, field), condition.left_attr.func, condition.left_attr.lengthparam);
+            break;
+          case ROUND_FUNC:
+            filter_obj.init_func(Field(table, field), condition.left_attr.func, condition.left_attr.roundparam);
+            break;
+          case FORMAT_FUNC:
+            filter_obj.init_func(Field(table, field), condition.left_attr.func, condition.left_attr.formatparam);
+            break;
+          default:
+            return RC::UNIMPLENMENT;
+          }
+        } else {
+          filter_obj.init_attr(Field(table, field));
+        }
+
+      }
+
       filter_unit->set_left(filter_obj);
     } else if(condition.left_type==VALUE_TYPE){
       if(condition.left_value.attr_type()==DATES&& !common::is_valid_date(condition.left_value.data())){
@@ -198,15 +288,45 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::string defa
     }
 
     if (condition.right_type==ATTR_TYPE) {
-      Table *table = nullptr;
-      const FieldMeta *field = nullptr;
-      rc = get_table_and_field(db, default_table, tables, top_tables,condition.right_attr, table, field);
-      if (rc != RC::SUCCESS) {
-        LOG_WARN("cannot find attr");
-        return rc;
-      }
       FilterObj filter_obj;
-      filter_obj.init_attr(Field(table, field));
+      if (condition.right_attr.func != NO_FUNC && condition.right_attr.attribute_name.empty()) {
+        Value v;
+        rc = function_calc(condition.right_attr, v);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("function_calc false.");
+          return rc;
+        }
+
+        filter_obj.init_value(v);
+      } else {
+        Table *table = nullptr;
+        const FieldMeta *field = nullptr;
+        rc = get_table_and_field(db, default_table, tables, top_tables,condition.right_attr, table, field);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("cannot find attr");
+          return rc;
+        }
+
+        if (condition.right_attr.func != NO_FUNC) {
+          switch (condition.right_attr.func)
+          {
+          case LENGTH_FUNC:
+            filter_obj.init_func(Field(table, field), condition.right_attr.func, condition.right_attr.lengthparam);
+            break;
+          case ROUND_FUNC:
+            filter_obj.init_func(Field(table, field), condition.right_attr.func, condition.right_attr.roundparam);
+            break;
+          case FORMAT_FUNC:
+            filter_obj.init_func(Field(table, field), condition.right_attr.func, condition.right_attr.formatparam);
+            break;
+          default:
+            return RC::UNIMPLENMENT;
+          }
+        } else {
+          filter_obj.init_attr(Field(table, field));
+        }
+      }
+
       filter_unit->set_right(filter_obj);
     } else if(condition.right_type==VALUE_TYPE){
       if(condition.right_value.attr_type()==DATES&& !common::is_valid_date(condition.right_value.data())){

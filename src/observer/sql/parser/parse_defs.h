@@ -31,12 +31,48 @@ class FieldExpr;
  * @defgroup SQLParser SQL Parser 
  */
 enum Agg{
+  NO_AGG,
   MAX_AGG,
   MIN_AGG,
   AVG_AGG,
   COUNT_AGG,
-  SUM_AGG,
-  NO_AGG,
+  SUM_AGG, 
+};
+enum Func{
+  NO_FUNC,     ///< 默认值
+  LENGTH_FUNC, ///< length 
+  ROUND_FUNC,  ///< round 
+  FORMAT_FUNC, ///< date_format 
+};
+
+/**
+ * @brief 存储输入length函数的参数
+ */
+struct LengthParam
+{
+  std::string relation_name;   ///< relation name (may be NULL) 表名
+  std::string attribute_name;  ///< attribute name              属性名
+  Value raw_data;              ///< 原始输入
+};
+/**
+ * @brief 存储输入round函数的参数
+ */
+struct RoundParam
+{
+  std::string relation_name;   ///< relation name (may be NULL) 表名
+  std::string attribute_name;  ///< attribute name              属性名
+  Value raw_data;              ///< 原始输入，小数
+  Value bits;                 ///< 原始输入，表示保存的小数点位数
+};
+/**
+ * @brief 存储输入date_format函数的参数
+ */
+struct FormatParam
+{
+  std::string relation_name;   ///< relation name (may be NULL) 表名
+  std::string attribute_name;  ///< attribute name              属性名
+  Value raw_data;              ///< 原始输入，日期
+  Value format;          ///< 原始输入，要格式化的格式
 };
 /**
  * @brief 描述一个属性
@@ -53,6 +89,10 @@ struct RelAttrSqlNode
   bool is_right;
   std::string alias_name;
   std::string sqlString;
+  Func func;                   ///< 存在函数的类型/不存在函数
+  LengthParam lengthparam;
+  RoundParam roundparam;
+  FormatParam formatparam;
 };
 struct ExpressionSqlNode{
   std::vector<RelAttrSqlNode> relAttrSqlNodes;//for select attr

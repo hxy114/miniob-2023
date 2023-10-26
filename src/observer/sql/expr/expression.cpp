@@ -19,6 +19,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/optimizer/logical_plan_generator.h"
 #include "sql/operator/physical_operator.h"
 #include "sql/optimizer/physical_plan_generator.h"
+#include <cmath>
+#include "sql/stmt/utils.h"
 using namespace std;
 
 RC FieldExpr::get_value(const Tuple &tuple, Value &value) const
@@ -599,4 +601,44 @@ RC ArithmeticExpr::try_get_value(Value &value) const
   }
 
   return calc_value(left_value, right_value, value);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+RC FuncExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  Value tuple_value;
+  tuple.find_cell(TupleCellSpec(table_name(), field_name()), tuple_value);
+  switch (func_)
+  {
+  case LENGTH_FUNC:
+  {
+    int length = tuple_value.get_string().size();
+    value.set_int(length);
+  } break;
+  case ROUND_FUNC:
+  {
+    float tuple_float = tuple_value.get_float();
+    if (roundparam_.bits.length() == 0) {
+      // 只有一个参数
+      value.set_int(round(tuple_float));
+    } else if (roundparam_.bits.attr_type() != INTS) {
+      LOG_ERROR("round() Func bits error.");
+      return RC::VARIABLE_NOT_VALID;
+    } else {
+      tuple_float *= pow(10, roundparam_.bits.get_int());
+      value.set_float(round(tuple_float)/pow(10, roundparam_.bits.get_int()));
+    }
+  } break;
+  case FORMAT_FUNC:
+  {
+    string tuple_date = tuple_value.get_string();
+    string format = formatparam_.format.get_string();
+    value.set_string(formatDate(tuple_date.c_str(), format.c_str()).c_str());
+  } break;
+  
+  default:
+    return RC::UNIMPLENMENT;
+  }
+
+  return RC::SUCCESS;
 }

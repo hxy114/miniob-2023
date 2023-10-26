@@ -32,29 +32,59 @@ struct FilterObj
   SelectStmt select;
   std::vector<Value>value_list;
   Expression *expression;
+  Func func_;
+  LengthParam lengthparam_;
+  RoundParam roundparam_;
+  FormatParam formatparam_;
 
   void init_attr(const Field &field)
   {
     filter_type_ = ATTR_TYPE;
+    this->func_ = NO_FUNC;
     this->field = field;
   }
 
   void init_value(const Value &value)
   {
     filter_type_ = VALUE_TYPE;
+    this->func_ = NO_FUNC;
     this->value = value;
   }
   void init_select(const SelectStmt &selectStmt){
     filter_type_=SUB_SELECT_TYPE;
+    this->func_ = NO_FUNC;
     this->select=selectStmt;
   }
   void init_value_list(const std::vector<Value>&value_list){
     filter_type_=VALUE_LIST_TYPE;
+    this->func_ = NO_FUNC;
     this->value_list.insert(this->value_list.end(),value_list.begin(),value_list.end());
   }
   void init_expression( Expression *expression){
     filter_type_=EXPR_TYPE;
+    this->func_ = NO_FUNC;
     this->expression=expression;
+  }
+  void init_func(const Field &field, const Func &func, const LengthParam &lengthparam)
+  {
+    filter_type_ = ATTR_TYPE;
+    this->field = field;
+    this->func_ = LENGTH_FUNC;
+    this->lengthparam_ = lengthparam;
+  }
+  void init_func(const Field &field, const Func &func, const RoundParam &roundparam)
+  {
+    filter_type_ = ATTR_TYPE;
+    this->field = field;
+    this->func_ = ROUND_FUNC;
+    this->roundparam_ = roundparam;
+  }
+  void init_func(const Field &field, const Func &func, const FormatParam &formatparam)
+  {
+    filter_type_ = ATTR_TYPE;
+    this->field = field;
+    this->func_ = FORMAT_FUNC;
+    this->formatparam_ = formatparam;
   }
 };
 

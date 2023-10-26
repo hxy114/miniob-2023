@@ -117,6 +117,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
          EXISTS
          OR
          AS
+        LENGTH_func
+        ROUND_func
+        FORMAT_func
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -141,6 +144,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   std::vector<UpdateValue>*         update_list;
   bool                              is_null;
   std::vector<OrderBySqlNode> *      order_by;
+  LengthParam *                     length_func_param;
+  RoundParam *                      round_func_param;
+  FormatParam *                     format_func_param;
 }
 
 %token <number> NUMBER
@@ -168,6 +174,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <rel_attr_list>       select_attr
 %type <inner_join_list>     rel_list
 %type <rel_attr_list>       attr_list
+%type <length_func_param>   length_func_param
+%type <round_func_param>    round_func_param
+%type <format_func_param>   format_func_param
 %type <expression>          expression
 %type <expression>          expression_list
 %type <sql_node>            calc_stmt
@@ -644,9 +653,8 @@ select_stmt:        /*  select 语句的语法解析树*/
            $$->selection.alias_map.insert(std::pair<std::string, std::string>($5, $4));
            }else{
            $$->selection.is_alias_right=false;
-           }
-
             }
+           }
 
            if ($7 != nullptr) {
              $$->selection.conditions.insert($$->selection.conditions.begin(),$7->begin(),$7->end());
@@ -661,6 +669,25 @@ select_stmt:        /*  select 语句的语法解析树*/
            $$->selection.is_sub_select=false;
            free($4);
          }
+          | SELECT expression_list where {
+            $$ = new ParsedSqlNode(SCF_SELECT);
+            if ($2 != nullptr) {
+                $$->selection.attributes.swap($2->relAttrSqlNodes);
+                $$->selection.attributes_expression.swap($2->expression);
+                $$->selection.stringsqlExprs.swap($2->stringsqlExprs);
+                $$->selection.fieldExprs.swap($2->fieldExprs);
+                $$->selection.is_expression_select_attr=$2->is_expression;
+                std::reverse($$->selection.attributes_expression.begin(), $$->selection.attributes_expression.end());
+                delete $2;
+              }
+            $$->selection.is_alias_right=true;
+            if ($3 != nullptr) {
+                $$->selection.conditions.insert($$->selection.conditions.begin(),$3->begin(),$3->end());
+                std::reverse($$->selection.conditions.begin(), $$->selection.conditions.end());
+                delete $3;
+              }
+            $$->selection.is_sub_select=false;
+          }
 
     ;
 order:
@@ -831,6 +858,7 @@ expression:
            auto relAttrSqlNode = new RelAttrSqlNode;
            relAttrSqlNode->attribute_name = $1;
            relAttrSqlNode->agg=NO_AGG;
+           relAttrSqlNode->func = NO_FUNC;
            relAttrSqlNode->is_right=true;
            if($2!=nullptr){
            relAttrSqlNode->alias_name=$2;
@@ -854,6 +882,7 @@ expression:
               relAttrSqlNode->attribute_name = (*$3)[0];
               relAttrSqlNode->is_right=true;
               relAttrSqlNode->agg=$1;
+              relAttrSqlNode->func = NO_FUNC;
               }
               if($5!=nullptr){
                relAttrSqlNode->alias_name=$5;
@@ -875,6 +904,7 @@ expression:
            relAttrSqlNode->relation_name  = $1;
            relAttrSqlNode->attribute_name = $3;
            relAttrSqlNode->agg=NO_AGG;
+           relAttrSqlNode->func = NO_FUNC;
            relAttrSqlNode->is_right=true;
            if($4!=nullptr){
            relAttrSqlNode->alias_name=$4;
@@ -897,6 +927,7 @@ expression:
                     relAttrSqlNode->attribute_name = $5;
                     relAttrSqlNode->is_right=true;
                     relAttrSqlNode->agg=$1;
+                    relAttrSqlNode->func = NO_FUNC;
                     if($7!=nullptr){
                           relAttrSqlNode->alias_name=$7;
                           }
@@ -922,6 +953,7 @@ expression:
                relAttrSqlNode->is_right=true;
                }
                relAttrSqlNode->agg=NO_AGG;
+               relAttrSqlNode->func = NO_FUNC;
                relAttrSqlNode->sqlString=token_name(sql_string, &@$);
                $$->relAttrSqlNodes.push_back(*relAttrSqlNode);
                auto fieldExpr=new FieldExpr;
@@ -943,6 +975,7 @@ expression:
                }
 
                relAttrSqlNode->agg=NO_AGG;
+               relAttrSqlNode->func = NO_FUNC;
                relAttrSqlNode->sqlString=token_name(sql_string, &@$);
                $$->relAttrSqlNodes.push_back(*relAttrSqlNode);
                auto fieldExpr=new FieldExpr;
@@ -952,7 +985,74 @@ expression:
                $$->is_expression=false;
                $$->is_value=false;
          }
-    ;
+        | LENGTH_func LBRACE length_func_param RBRACE as {
+          $$=new ExpressionSqlNode;
+          auto relAttrSqlNode = new RelAttrSqlNode;
+          relAttrSqlNode->relation_name  = $3->relation_name;
+          relAttrSqlNode->attribute_name = $3->attribute_name;
+          relAttrSqlNode->is_right = true;
+          if($5!=nullptr){relAttrSqlNode->alias_name=$5;}
+          relAttrSqlNode->agg = NO_AGG;
+          relAttrSqlNode->func = LENGTH_FUNC;
+          relAttrSqlNode->lengthparam = *$3;
+          relAttrSqlNode->sqlString=token_name(sql_string, &@$);
+          $$->relAttrSqlNodes.push_back(*relAttrSqlNode);
+
+          /*auto funcExpr=new FuncExpr;
+          funcExpr->set_name(token_name(sql_string, &@$));
+          funcExpr->set_func(LENGTH_FUNC);
+          funcExpr->set_lengthparam($3);
+          $$->expression.push_back(funcExpr);
+          $$->funcExprs.push_back(funcExpr);*/
+          $$->is_expression=false;
+          $$->is_value=false;
+        }
+        | ROUND_func LBRACE round_func_param RBRACE as {
+          $$=new ExpressionSqlNode;
+          auto relAttrSqlNode = new RelAttrSqlNode;
+          relAttrSqlNode->relation_name  = $3->relation_name;
+          relAttrSqlNode->attribute_name = $3->attribute_name;
+          relAttrSqlNode->is_right = true;
+          if($5!=nullptr){relAttrSqlNode->alias_name=$5;}
+          relAttrSqlNode->agg = NO_AGG;
+          relAttrSqlNode->func = ROUND_FUNC;
+          relAttrSqlNode->roundparam = *$3;
+          relAttrSqlNode->sqlString=token_name(sql_string, &@$);
+          $$->relAttrSqlNodes.push_back(*relAttrSqlNode);
+
+          /*auto funcExpr=new FuncExpr;
+          funcExpr->set_name(token_name(sql_string, &@$));
+          funcExpr->set_func(ROUND_FUNC);
+          funcExpr->set_roundparam($3);
+          $$->expression.push_back(funcExpr);
+          $$->funcExprs.push_back(funcExpr);*/
+          $$->is_expression=false;
+          $$->is_value=false;
+
+        }
+        | FORMAT_func LBRACE format_func_param RBRACE as {
+          $$=new ExpressionSqlNode;
+          auto relAttrSqlNode = new RelAttrSqlNode;
+          relAttrSqlNode->relation_name  = $3->relation_name;
+          relAttrSqlNode->attribute_name = $3->attribute_name;
+          relAttrSqlNode->is_right = true;
+          if($5!=nullptr){relAttrSqlNode->alias_name=$5;}
+          relAttrSqlNode->agg = NO_AGG;
+          relAttrSqlNode->func = FORMAT_FUNC;
+          relAttrSqlNode->formatparam = *$3;
+          relAttrSqlNode->sqlString=token_name(sql_string, &@$);
+          $$->relAttrSqlNodes.push_back(*relAttrSqlNode);
+
+          /*auto funcExpr=new FuncExpr;
+          funcExpr->set_name(token_name(sql_string, &@$));
+          funcExpr->set_func(FORMAT_FUNC);
+          funcExpr->set_formatparam($3);
+          $$->expression.push_back(funcExpr);
+          $$->funcExprs.push_back(funcExpr);*/
+          $$->is_expression=false;
+          $$->is_value=false;
+        }
+        ;
 
 select_attr:
     /*'*' {
@@ -1152,6 +1252,102 @@ rel_list:
          }
     ;
 
+/* Function length()的参数匹配 */
+length_func_param:
+  ID {
+    $$ = new LengthParam;
+    $$->attribute_name = $1;
+    free($1);
+  }
+  | ID DOT ID {
+    $$ = new LengthParam;
+    $$->relation_name = $1;
+    $$->attribute_name = $3;
+    free($1);
+    free($3);
+  }
+  | PATTERN {
+    $$ = new LengthParam;
+
+    char *tmp = common::substr($1,1,strlen($1)-2);
+    $$->raw_data = Value(tmp,CHARS);
+    free(tmp);
+    free($1);
+  }
+  ;
+/* Function round()的参数匹配 */
+round_func_param:
+  ID COMMA NUMBER {
+    $$ = new RoundParam;
+    $$->attribute_name = $1;
+    $$->bits = Value((int)$3);
+    free($1);
+  }
+  | ID {
+    $$ = new RoundParam;
+    $$->attribute_name = $1;
+    free($1);
+  }
+  | ID DOT ID COMMA NUMBER {
+    $$ = new RoundParam;
+    $$->relation_name = $1;
+    $$->attribute_name = $3;
+    $$->bits = Value((int)$5);
+    free($1);
+    free($3);
+  }
+  | ID DOT ID {
+    $$ = new RoundParam;
+    $$->relation_name = $1;
+    $$->attribute_name = $3;
+    free($1);
+    free($3);
+  }
+  | FLOAT COMMA NUMBER {
+    $$ = new RoundParam;
+    $$->raw_data = Value((float)$1);
+    $$->bits = Value((int)$3);
+  }
+  | FLOAT {
+    $$ = new RoundParam;
+    $$->raw_data = Value((float)$1);
+  }
+  ;
+/* Function date_format()的参数匹配 */
+format_func_param:
+  ID COMMA PATTERN {
+    $$ = new FormatParam;
+    $$->attribute_name = $1;
+
+    char *tmp = common::substr($3,1,strlen($3)-2);
+    $$->format = Value(tmp,CHARS);
+    free(tmp); 
+    free($1);
+  }
+  | ID DOT ID COMMA PATTERN {
+    $$ = new FormatParam;
+    $$->relation_name = $1;
+    $$->attribute_name = $3;
+
+    char *tmp = common::substr($5,1,strlen($5)-2);
+    $$->format = Value(tmp,CHARS);
+    free(tmp); 
+    free($1);
+    free($3);
+  }
+  | DATE COMMA PATTERN {
+    $$ = new FormatParam;
+
+    char *tmp = common::substr($1,1,strlen($1)-2);
+    $$->raw_data = Value(tmp,DATES);
+    free(tmp);
+
+    char *tmp2 = common::substr($3,1,strlen($3)-2);
+    $$->format = Value(tmp2,CHARS);
+    free(tmp2);
+    free($3);
+  }
+  ;
 
 where:
     /* empty */

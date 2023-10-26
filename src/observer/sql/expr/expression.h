@@ -47,6 +47,7 @@ enum class ExprType
   SUBSELECT,
   VALUELIST,
   STRINGSQL,
+  FUNC
 };
 
 /**
@@ -133,6 +134,71 @@ public:
 private:
   Field field_;
 };
+
+/**
+ * @brief 函数表达式
+ * @ingroup Expression
+ */
+class FuncExpr : public Expression 
+{
+public:
+  FuncExpr() = default;
+
+  FuncExpr(const Field &field, Func func, LengthParam lengthparam) : field_(field),func_(LENGTH_FUNC),lengthparam_(lengthparam)
+  {}
+  FuncExpr(const Field &field, Func func, RoundParam roundparam) : field_(field),func_(ROUND_FUNC),roundparam_(roundparam)
+  {}
+  FuncExpr(const Field &field, Func func, FormatParam formatparam) : field_(field),func_(FORMAT_FUNC),formatparam_(formatparam)
+  {}
+
+  virtual ~FuncExpr() = default;
+
+  ExprType type() const override { return ExprType::FUNC; }
+  AttrType value_type() const override { 
+    if (func_ == LENGTH_FUNC) return INTS;
+    else if (func_ == ROUND_FUNC && roundparam_.bits.length() == 0) return INTS;
+    else if (func_ == ROUND_FUNC && roundparam_.bits.length() != 0) return FLOATS;
+    else if (func_ == FORMAT_FUNC) return CHARS; 
+  }
+
+  Field &field() { return field_; }
+  void setField(Field field){ field_=field; }
+
+  const Field &field() const { return field_; }
+
+  LengthParam lengthparam() { return lengthparam_; }
+  void set_lengthparam(LengthParam *lengthparam) {
+    lengthparam_ = *lengthparam;
+  }
+
+  RoundParam roundparam() { return roundparam_; }
+  void set_roundparam(RoundParam *roundparam) {
+    roundparam_ = *roundparam;
+  }
+
+  FormatParam formatparam() { return formatparam_; }
+  void set_formatparam(FormatParam *formatparam) {
+    formatparam_ = *formatparam;
+  }
+
+  void set_func(Func func) { func_ = func; }
+
+  const char *table_name() const { return field_.table_name(); }
+
+  const char *field_name() const { return field_.field_name(); }
+
+  Func func() const { return func_; }
+
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+private:
+  Field field_;
+  Func func_;
+  LengthParam lengthparam_;
+  RoundParam roundparam_;
+  FormatParam formatparam_;
+};
+
 /**
  * @brief 字段表达式
  * @ingroup Expression

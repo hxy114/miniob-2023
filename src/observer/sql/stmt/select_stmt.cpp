@@ -18,6 +18,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/string.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include <cmath>
+#include "utils.h"
 
 SelectStmt::~SelectStmt()
 {
@@ -33,6 +35,15 @@ static void wildcard_fields(Table *table, std::vector<Field> &field_metas)
   const int field_num = table_meta.field_num();
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
     field_metas.push_back(Field(table, table_meta.field(i)));
+  }
+}
+
+static void wildcard_expressions(Table *table, std::vector<Expression*> &all_expressions)
+{
+  const TableMeta &table_meta = table->table_meta();
+  const int field_num = table_meta.field_num();
+  for (int i = table_meta.sys_field_num(); i < field_num; i++) {
+    all_expressions.push_back(static_cast<Expression*>(new FieldExpr(table, table_meta.field(i))));
   }
 }
 
@@ -525,6 +536,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
     }else{
       // collect query fields in `select` statement
       std::vector<Field> query_fields;
+      std::vector<Expression*> all_expressions;
       for (int i = static_cast<int>(select_sql.attributes.size()) - 1; i >= 0; i--) {
         const RelAttrSqlNode &relation_attr = select_sql.attributes[i];
 
@@ -532,6 +544,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
             0 == strcmp(relation_attr.attribute_name.c_str(), "*")) {
           for (Table *table : tables) {
             wildcard_fields(table, query_fields);
+            wildcard_expressions(table, all_expressions);
           }
 
         } else if (!common::is_blank(relation_attr.relation_name.c_str())) {
@@ -545,6 +558,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
             }
             for (Table *table : tables) {
               wildcard_fields(table, query_fields);
+              wildcard_expressions(table, all_expressions);
             }
           } else {
             auto iter = table_map.find(table_name);
@@ -556,6 +570,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
             Table *table = iter->second;
             if (0 == strcmp(field_name, "*")) {
               wildcard_fields(table, query_fields);
+              wildcard_expressions(table, all_expressions);
             } else {
               const FieldMeta *field_meta = table->table_meta().field(field_name);
               if (nullptr == field_meta) {
@@ -564,9 +579,64 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
               }
 
               query_fields.push_back(Field(table, field_meta));
+              if (relation_attr.func == NO_FUNC) {
+                all_expressions.push_back(static_cast<Expression*>(new FieldExpr(table, field_meta)));
+              } else {
+                switch (relation_attr.func)
+                {
+                case LENGTH_FUNC:
+                  all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), LENGTH_FUNC, relation_attr.lengthparam)));
+                  break;
+                case ROUND_FUNC:
+                  all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), ROUND_FUNC, relation_attr.roundparam)));
+                  break;
+                case FORMAT_FUNC:
+                  all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), FORMAT_FUNC, relation_attr.formatparam)));
+                  break;
+                default:
+                  return RC::UNIMPLENMENT;
+                }
+                
+              }
             }
           }
         } else {
+          if (relation_attr.func != NO_FUNC && relation_attr.attribute_name.empty()) {
+            // 输入为原始字符串  e.g. select length('this is a string') as len [from t];
+            Value v;
+            switch (relation_attr.func)
+            {
+            case LENGTH_FUNC:
+            {
+              v.set_int(relation_attr.lengthparam.raw_data.get_string().size());
+            } break;
+            case ROUND_FUNC:
+            {
+              float raw_data = relation_attr.roundparam.raw_data.get_float();
+              if (relation_attr.roundparam.bits.length() == 0) {
+                // 只有一个参数
+                v.set_int(round(raw_data));
+              } else if (relation_attr.roundparam.bits.attr_type() != INTS) {
+                return RC::SQL_SYNTAX;
+              } else {
+                raw_data *= pow(10, relation_attr.roundparam.bits.get_int());
+                v.set_float(round(raw_data)/pow(10, relation_attr.roundparam.bits.get_int()));
+              }
+            } break;
+            case FORMAT_FUNC:
+            {
+              std::string raw_date = relation_attr.formatparam.raw_data.get_string();
+              std::string format = relation_attr.formatparam.format.get_string();
+              v.set_string(formatDate(raw_date.c_str(), format.c_str()).c_str());
+            } break;
+            
+            default:
+              return RC::UNIMPLENMENT;
+            }
+            all_expressions.push_back(static_cast<Expression*>(new ValueExpr(v)));
+            continue;
+          }
+
           if (tables.size() != 1) {
             LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
             return RC::SCHEMA_FIELD_MISSING;
@@ -580,6 +650,25 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
           }
 
           query_fields.push_back(Field(table, field_meta));
+          if (relation_attr.func == NO_FUNC) {
+            all_expressions.push_back(static_cast<Expression*>(new FieldExpr(table, field_meta)));
+          } else {
+            switch (relation_attr.func)
+            {
+            case LENGTH_FUNC:
+              all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), LENGTH_FUNC, relation_attr.lengthparam)));
+              break;
+            case ROUND_FUNC:
+              all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), ROUND_FUNC, relation_attr.roundparam)));
+              break;
+            case FORMAT_FUNC:
+              all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), FORMAT_FUNC, relation_attr.formatparam)));
+              break;
+            default:
+              return RC::UNIMPLENMENT;
+            }          
+          }
+
         }
       }
       LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), query_fields.size());
@@ -680,6 +769,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
       select_stmt->alias_map_.swap(alias_map);
       select_stmt->col_alias_map_.swap(col_alias_map);
       select_stmt->is_expression_select_attr_=false;
+      select_stmt->all_expressions_.swap(all_expressions);
       stmt = select_stmt;
       return RC::SUCCESS;
 

@@ -58,6 +58,7 @@ public:
   virtual LogicalOperatorType type() const = 0;
 
   void add_child(std::unique_ptr<LogicalOperator> oper);
+  void add_expression(std::unique_ptr<Expression> expr);
   std::vector<std::unique_ptr<LogicalOperator>> &children()
   {
     return children_;

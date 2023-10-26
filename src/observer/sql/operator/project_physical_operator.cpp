@@ -16,6 +16,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/project_physical_operator.h"
 #include "storage/record/record.h"
 #include "storage/table/table.h"
+#include <cmath>
+#include "sql/stmt/utils.h"
 
 RC ProjectPhysicalOperator::open(Trx *trx)
 {
@@ -36,9 +38,22 @@ RC ProjectPhysicalOperator::open(Trx *trx)
 RC ProjectPhysicalOperator::next()
 {
   RC rc;
-  if (children_.empty()) {
+  if (children_.empty() && expressions_.size() == 0) {
     return RC::RECORD_EOF;
+  } else if (expressions_.size() != 0) {
+    // 无表查询
+    if (withoutTable_EOF_flag) {
+      return RC::RECORD_EOF;
+    }
+    withoutTable_EOF_flag = true;
+    if (children_.empty()) {
+      // 无where
+      return RC::SUCCESS; //直接在current_tuple()返回计算结果
+    } else {
+      return children_[0]->next();
+    }
   }
+
   if(RC::SUCCESS!=(rc=children_[0]->next())){
     return rc;
   }else{
@@ -65,9 +80,66 @@ RC ProjectPhysicalOperator::close()
 }
 Tuple *ProjectPhysicalOperator::current_tuple()
 {
-  if(my_expressions_.size()>0){
-    return  &valueListTuple_;
+  if (expressions_.size() == 0 && !children_.empty()) {
+    if(my_expressions_.size()>0){
+      return  &valueListTuple_;
+    } else if (all_expressions_.size() > 0) {
+      std::vector<Value> values;
+      values.resize(all_expressions_.size());
+      Tuple *cur_tuple = children_[0]->current_tuple();
+      for (int i=0; i<all_expressions_.size(); ++i) {
+        Value v;
+        all_expressions_[i]->get_value(*cur_tuple, v);
+        values[i] = v;
+      }
+      valueListTuple_.set_cells(values);
+      return &valueListTuple_;
+    }
+    
   }
+
+  // 无表查询
+  if (expressions_.size() != 0) {
+    std::vector<Value> values;
+    values.resize(expressions_.size());
+    for (int i=0; i<expressions_.size(); ++i) {
+      FuncExpr *expr = static_cast<FuncExpr *>(expressions_[i].get());
+      Value v;
+      switch (expr->func())
+      {
+      case LENGTH_FUNC:
+      {
+        v.set_int(expr->lengthparam().raw_data.get_string().size());
+      } break;
+      case ROUND_FUNC:
+      {
+        float raw_data = expr->roundparam().raw_data.get_float();
+        if (expr->roundparam().bits.length() == 0) {
+          // 只有一个参数
+          v.set_int(round(raw_data));
+        } else if (expr->roundparam().bits.attr_type() != INTS) {
+          break;
+        } else {
+          raw_data *= pow(10, expr->roundparam().bits.get_int());
+          v.set_float(round(raw_data)/pow(10, expr->roundparam().bits.get_int()));
+        }
+      } break;
+      case FORMAT_FUNC:
+      {
+        std::string raw_date = expr->formatparam().raw_data.get_string();
+        std::string format = expr->formatparam().format.get_string();
+        v.set_string(formatDate(raw_date.c_str(), format.c_str()).c_str());
+      } break;
+      
+      default:
+        break;
+      }
+      values[i] = v;
+    }
+    valueListTuple_.set_cells(values);
+    return &valueListTuple_;
+  }
+
   tuple_.set_tuple(children_[0]->current_tuple());
   return &tuple_;
 }

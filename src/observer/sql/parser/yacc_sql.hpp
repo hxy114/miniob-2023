@@ -1,8 +1,8 @@
-/* A Bison parser, made by GNU Bison 3.7.  */
+/* A Bison parser, made by GNU Bison 3.7.6.  */
 
 /* Bison interface for Yacc-like parsers in C
 
-   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2020 Free Software Foundation,
+   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2021 Free Software Foundation,
    Inc.
 
    This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 /* As a special exception, you may create a larger work that contains
    part or all of the Bison parser skeleton and distribute that work
@@ -117,13 +117,16 @@ extern int yydebug;
     EXISTS = 318,                  /* EXISTS  */
     OR = 319,                      /* OR  */
     AS = 320,                      /* AS  */
-    NUMBER = 321,                  /* NUMBER  */
-    FLOAT = 322,                   /* FLOAT  */
-    ID = 323,                      /* ID  */
-    SSS = 324,                     /* SSS  */
-    DATE = 325,                    /* DATE  */
-    PATTERN = 326,                 /* PATTERN  */
-    UMINUS = 327                   /* UMINUS  */
+    LENGTH_func = 321,             /* LENGTH_func  */
+    ROUND_func = 322,              /* ROUND_func  */
+    FORMAT_func = 323,             /* FORMAT_func  */
+    NUMBER = 324,                  /* NUMBER  */
+    FLOAT = 325,                   /* FLOAT  */
+    ID = 326,                      /* ID  */
+    SSS = 327,                     /* SSS  */
+    DATE = 328,                    /* DATE  */
+    PATTERN = 329,                 /* PATTERN  */
+    UMINUS = 330                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -132,7 +135,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 122 "yacc_sql.y"
+#line 125 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   ConditionSqlNode *                condition;
@@ -155,8 +158,11 @@ union YYSTYPE
   std::vector<UpdateValue>*         update_list;
   bool                              is_null;
   std::vector<OrderBySqlNode> *      order_by;
+  LengthParam *                     length_func_param;
+  RoundParam *                      round_func_param;
+  FormatParam *                     format_func_param;
 
-#line 160 "yacc_sql.hpp"
+#line 166 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

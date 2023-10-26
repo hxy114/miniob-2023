@@ -29,7 +29,8 @@ See the Mulan PSL v2 for more details. */
 class ProjectLogicalOperator : public LogicalOperator 
 {
 public:
-  ProjectLogicalOperator(const std::vector<Field> &fields, std::unordered_map<std::string, std::string> &col_alias_map, std::unordered_map<std::string, std::string> &alias_map,std::vector<Expression*>&my_expression);
+  ProjectLogicalOperator(const std::vector<Field> &fields, std::unordered_map<std::string, std::string> &col_alias_map, std::unordered_map<std::string, std::string> &alias_map,
+            std::vector<Expression*>&my_expression, std::vector<Expression*> &all_expressions);
   virtual ~ProjectLogicalOperator() = default;
 
   LogicalOperatorType type() const override
@@ -60,6 +61,10 @@ public:
    std::vector<Expression*>&my_expressions(){
     return my_expressions_;
   }
+  std::vector<Expression*> &all_expressions()
+  {
+    return all_expressions_;
+  }
 
 private:
   //! 投影映射的字段名称
@@ -69,6 +74,6 @@ private:
   std::vector<Field> fields_;
   std::unordered_map<std::string, std::string> col_alias_map_;
   std::unordered_map<std::string, std::string> alias_map_;
-  std::vector<Expression*>my_expressions_;
-
+  std::vector<Expression*>my_expressions_; //hxy的
+  std::vector<Expression*> all_expressions_; // 用于无表达式无agg情况下的简单查询(Function)
 };
