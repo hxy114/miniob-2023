@@ -35,10 +35,25 @@ RC ProjectPhysicalOperator::open(Trx *trx)
 
 RC ProjectPhysicalOperator::next()
 {
+  RC rc;
   if (children_.empty()) {
     return RC::RECORD_EOF;
   }
-  return children_[0]->next();
+  if(RC::SUCCESS!=(rc=children_[0]->next())){
+    return rc;
+  }else{
+    if(!my_expressions_.empty()){
+      std::vector<Value>values(my_expressions_.size());
+
+      for(int i=0;i<my_expressions_.size();i++){
+        if(my_expressions_[i]->get_value(*children_[0]->current_tuple(),values[i])!=RC::SUCCESS){
+          return RC::INTERNAL;
+        }
+      }
+      valueListTuple_.set_cells(values);
+    }
+    return RC::SUCCESS;
+  }
 }
 
 RC ProjectPhysicalOperator::close()
@@ -50,14 +65,39 @@ RC ProjectPhysicalOperator::close()
 }
 Tuple *ProjectPhysicalOperator::current_tuple()
 {
+  if(my_expressions_.size()>0){
+    return  &valueListTuple_;
+  }
   tuple_.set_tuple(children_[0]->current_tuple());
   return &tuple_;
 }
 
-void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta *field_meta)
+void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta *field_meta, const std::unordered_map<std::string, std::string> &col_alias_map, const std::unordered_map<std::string, std::string> &alias_map)
 {
   // 对单表来说，展示的(alias) 字段总是字段名称，
   // 对多表查询来说，展示的alias 需要带表名字
-  TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), field_meta->name());
+  std::string table_name = table->name();
+  std::string alias_name = field_meta->name();
+
+  if (col_alias_map.find(alias_name) != col_alias_map.end()) {
+    alias_name = col_alias_map.at(alias_name);
+  }
+
+  if (!table_name.empty()) {
+    // 多表查询
+    for (auto it = alias_map.begin(); it != alias_map.end(); it++) {
+      if (it->second == table_name) {
+        table_name = it->first;
+        alias_name = table_name + "." + alias_name;
+        break;
+      }
+    }
+  }
+
+  TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), alias_name.c_str());
+  //TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), field_meta->name());
   tuple_.add_cell_spec(spec);
+
 }
+void ProjectPhysicalOperator::add_my_expressions(std::vector<Expression *> &my_expressions)
+{ my_expressions_.insert(my_expressions_.end(),my_expressions.begin(),my_expressions.end());}

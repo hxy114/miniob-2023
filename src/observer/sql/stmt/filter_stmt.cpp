@@ -27,8 +27,8 @@ FilterStmt::~FilterStmt()
   filter_units_.clear();
 }
 
-RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-    const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt)
+RC FilterStmt::create(Db *db, Table *default_table,std::string default_table_alas, std::unordered_map<std::string, Table *> *tables,
+    const ConditionSqlNode *conditions, int condition_num, std::unordered_map<std::string, Table *>top_tables,FilterStmt *&stmt)
 {
   RC rc = RC::SUCCESS;
   stmt = nullptr;
@@ -36,7 +36,7 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
   FilterStmt *tmp_stmt = new FilterStmt();
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
-    rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit);
+    rc = create_filter_unit(db, default_table, default_table_alas,tables, conditions[i],top_tables, filter_unit);
     if (rc != RC::SUCCESS) {
       delete tmp_stmt;
       LOG_WARN("failed to create filter unit. condition index=%d", i);
@@ -44,13 +44,22 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
     }
     tmp_stmt->filter_units_.push_back(filter_unit);
   }
+  if(condition_num>0){
+    if(conditions[0].is_conjunction_or){
+      tmp_stmt->is_and_=false;
+    }else{
+      tmp_stmt->is_and_=true;
+    }
+  }else{
+    tmp_stmt->is_and_=true;
+  }
 
   stmt = tmp_stmt;
   return rc;
 }
 
 RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-    const RelAttrSqlNode &attr, Table *&table, const FieldMeta *&field)
+    std::unordered_map<std::string, Table *>top_tables,const RelAttrSqlNode &attr, Table *&table, const FieldMeta *&field)
 {
   if (common::is_blank(attr.relation_name.c_str())) {
     table = default_table;
@@ -59,9 +68,15 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
     if (iter != tables->end()) {
       table = iter->second;
     }
-  } else {
-    table = db->find_table(attr.relation_name.c_str());
   }
+  if (!top_tables.empty()&&table== nullptr) {
+    auto iter = top_tables.find(attr.relation_name);
+    if (iter != top_tables.end()) {
+      table = iter->second;
+    }
+  }/*else {
+    table = db->find_table(attr.relation_name.c_str());
+  }*/
   if (nullptr == table) {
     LOG_WARN("No such table: attr.relation_name: %s", attr.relation_name.c_str());
     return RC::SCHEMA_TABLE_NOT_EXIST;
@@ -77,8 +92,8 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
   return RC::SUCCESS;
 }
 
-RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-    const ConditionSqlNode &condition, FilterUnit *&filter_unit)
+RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::string default_table_alas,std::unordered_map<std::string, Table *> *tables,
+    const ConditionSqlNode &condition, std::unordered_map<std::string, Table *>top_tables,FilterUnit *&filter_unit)
 {
   RC rc = RC::SUCCESS;
 
@@ -87,50 +102,170 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     LOG_WARN("invalid compare operator : %d", comp);
     return RC::INVALID_ARGUMENT;
   }
-
+  if(comp==IS_NOT_NULL||comp==IS_NULL){
+    if(condition.right_type!=VALUE_TYPE||condition.right_value.attr_type()!=NULLS){
+      LOG_WARN("invalid compare num : %d", comp);
+      return RC::INVALID_ARGUMENT;
+    }
+  }
   filter_unit = new FilterUnit;
-
-  if (condition.left_is_attr) {
-    Table *table = nullptr;
-    const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);
+  if(comp==EXISTS_OP||comp==NOT_EXISTS_OP){
+    if(condition.right_type!=SUB_SELECT_TYPE){
+      LOG_WARN("invalid ");
+      return RC::INVALID_ARGUMENT;
+    }
+    Stmt *stmt;
+    top_tables.insert({default_table->name(),default_table});
+    if(!default_table_alas.empty()){
+      top_tables.insert({default_table_alas,default_table});
+    }
+    rc = SelectStmt::create(db, *condition.right_select, stmt,condition.right_select->is_sub_select,top_tables);
     if (rc != RC::SUCCESS) {
-      LOG_WARN("cannot find attr");
+      LOG_WARN("invalid ");
       return rc;
     }
     FilterObj filter_obj;
-    filter_obj.init_attr(Field(table, field));
-    filter_unit->set_left(filter_obj);
-  } else {
-    if(condition.left_value.attr_type()==DATES&& !common::is_valid_date(condition.left_value.data())){
-      return RC::INVALID_ARGUMENT;
+    filter_obj.init_select(*reinterpret_cast<SelectStmt*>(stmt));
+    filter_unit->set_right(filter_obj);
 
+
+  }else{
+    if (condition.left_type==ATTR_TYPE) {
+      Table *table = nullptr;
+      const FieldMeta *field = nullptr;
+      rc = get_table_and_field(db, default_table, tables, top_tables,condition.left_attr, table, field);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("cannot find attr");
+        return rc;
+      }
+      FilterObj filter_obj;
+      filter_obj.init_attr(Field(table, field));
+      filter_unit->set_left(filter_obj);
+    } else if(condition.left_type==VALUE_TYPE){
+      if(condition.left_value.attr_type()==DATES&& !common::is_valid_date(condition.left_value.data())){
+        return RC::INVALID_ARGUMENT;
+
+      }
+      FilterObj filter_obj;
+      filter_obj.init_value(condition.left_value);
+      filter_unit->set_left(filter_obj);
+    }else if(condition.left_type==SUB_SELECT_TYPE){
+      if(condition.left_select->attributes.size()>1){
+        LOG_WARN("invalid ");
+        return RC::INTERNAL;
+      }
+      Stmt *stmt;
+      top_tables.insert({default_table->name(),default_table});
+      if(!default_table_alas.empty()){
+        top_tables.insert({default_table_alas,default_table});
+      }
+      rc = SelectStmt::create(db, *condition.left_select, stmt,condition.left_select->is_sub_select,top_tables);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("invalid ");
+        return rc;
+      }
+      if(reinterpret_cast<SelectStmt*>(stmt)->query_fields().size()>1){
+        LOG_WARN("invalid ");
+        return RC::INTERNAL;
+      }
+      FilterObj filter_obj;
+      filter_obj.init_select(*reinterpret_cast<SelectStmt*>(stmt));
+      filter_unit->set_left(filter_obj);
+    }else if(condition.left_type==VALUE_LIST_TYPE){
+      FilterObj filter_obj;
+      filter_obj.init_value_list(condition.left_value_list);
+      filter_unit->set_left(filter_obj);
+    }else if(condition.left_type==EXPR_TYPE){
+      for(int i=0;i<condition.left_relAttrSqlNodes.size();i++){
+        Table *table = nullptr;
+        const FieldMeta *field = nullptr;
+        rc = get_table_and_field(db, default_table, tables, top_tables,condition.left_relAttrSqlNodes[i], table, field);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("cannot find attr");
+          return rc;
+        }
+        for(int j=0;j<condition.left_fieldExprs.size();j++){
+          if(condition.left_fieldExprs[j]->name().compare(condition.left_relAttrSqlNodes[i].sqlString)==0){
+            condition.left_fieldExprs[j]->setField(Field(table,field));
+          }
+
+        }
+      }
+
+      FilterObj filter_obj;
+      filter_obj.init_expression(condition.left_expr);
+      filter_unit->set_left(filter_obj);
     }
-    FilterObj filter_obj;
-    filter_obj.init_value(condition.left_value);
-    filter_unit->set_left(filter_obj);
+
+    if (condition.right_type==ATTR_TYPE) {
+      Table *table = nullptr;
+      const FieldMeta *field = nullptr;
+      rc = get_table_and_field(db, default_table, tables, top_tables,condition.right_attr, table, field);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("cannot find attr");
+        return rc;
+      }
+      FilterObj filter_obj;
+      filter_obj.init_attr(Field(table, field));
+      filter_unit->set_right(filter_obj);
+    } else if(condition.right_type==VALUE_TYPE){
+      if(condition.right_value.attr_type()==DATES&& !common::is_valid_date(condition.right_value.data())){
+        return RC::INVALID_ARGUMENT;
+
+      }
+      FilterObj filter_obj;
+      filter_obj.init_value(condition.right_value);
+      filter_unit->set_right(filter_obj);
+    }else if(condition.right_type==SUB_SELECT_TYPE){
+      if(condition.right_select->attributes.size()>1){
+        LOG_WARN("invalid ");
+        return RC::INTERNAL;
+      }
+      Stmt *stmt;
+      top_tables.insert({default_table->name(),default_table});
+      if(!default_table_alas.empty()){
+        top_tables.insert({default_table_alas,default_table});
+      }
+      rc = SelectStmt::create(db, *condition.right_select, stmt,condition.right_select->is_sub_select,top_tables);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("invalid ");
+        return rc;
+      }
+      if(reinterpret_cast<SelectStmt*>(stmt)->query_fields().size()>1){
+        LOG_WARN("invalid ");
+        return RC::INTERNAL;
+      }
+      FilterObj filter_obj;
+      filter_obj.init_select(*reinterpret_cast<SelectStmt*>(stmt));
+      filter_unit->set_right(filter_obj);
+    }else if(condition.right_type==VALUE_LIST_TYPE){
+      FilterObj filter_obj;
+      filter_obj.init_value_list(condition.right_value_list);
+      filter_unit->set_right(filter_obj);
+    }else if(condition.right_type==EXPR_TYPE){
+      for(int i=0;i<condition.right_relAttrSqlNodes.size();i++){
+        Table *table = nullptr;
+        const FieldMeta *field = nullptr;
+        rc = get_table_and_field(db, default_table, tables, top_tables,condition.right_relAttrSqlNodes[i], table, field);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("cannot find attr");
+          return rc;
+        }
+        for(int j=0;j<condition.right_fieldExprs.size();j++){
+          if(condition.right_fieldExprs[j]->name().compare(condition.right_relAttrSqlNodes[i].sqlString)==0){
+            condition.right_fieldExprs[j]->setField(Field(table,field));
+          }
+
+        }
+      }
+
+      FilterObj filter_obj;
+      filter_obj.init_expression(condition.right_expr);
+      filter_unit->set_right(filter_obj);
+    }
+
   }
 
-  if (condition.right_is_attr) {
-    Table *table = nullptr;
-    const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.right_attr, table, field);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("cannot find attr");
-      return rc;
-    }
-    FilterObj filter_obj;
-    filter_obj.init_attr(Field(table, field));
-    filter_unit->set_right(filter_obj);
-  } else {
-    if(condition.right_value.attr_type()==DATES&& !common::is_valid_date(condition.right_value.data())){
-      return RC::INVALID_ARGUMENT;
-
-    }
-    FilterObj filter_obj;
-    filter_obj.init_value(condition.right_value);
-    filter_unit->set_right(filter_obj);
-  }
 
   filter_unit->set_comp(comp);
 

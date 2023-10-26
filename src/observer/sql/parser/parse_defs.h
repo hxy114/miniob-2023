@@ -18,11 +18,15 @@ See the Mulan PSL v2 for more details. */
 #include <memory>
 #include <vector>
 #include <string>
-
+#include <unordered_map>
 #include "sql/parser/value.h"
 
-class Expression;
 
+class Expression;
+class ArithmeticExpr;
+struct SelectSqlNode;
+class StringSqlExpr;
+class FieldExpr;
 /**
  * @defgroup SQLParser SQL Parser 
  */
@@ -47,8 +51,17 @@ struct RelAttrSqlNode
   std::string attribute_name;  ///< attribute name              属性名
   Agg agg;
   bool is_right;
+  std::string alias_name;
+  std::string sqlString;
 };
-
+struct ExpressionSqlNode{
+  std::vector<RelAttrSqlNode> relAttrSqlNodes;//for select attr
+  std::vector<Expression*>  expression;//表达式list
+  std::vector<StringSqlExpr*>stringsqlExprs;//for agg
+  std::vector<FieldExpr*>fieldExprs; //for normal select
+  bool is_expression= false;
+  bool is_value=false;
+};
 /**
  * @brief 描述比较运算符
  * @ingroup SQLParser
@@ -63,10 +76,26 @@ enum CompOp
   GREAT_THAN,   ///< ">"
   LIKE,
   NOT_LIKE,
+  IS_NULL,
+  IS_NOT_NULL,
+  IN_OP,
+  NOT_IN_OP,
+  EXISTS_OP,
+  NOT_EXISTS_OP,
   NO_OP,
 
 };
-
+enum OrderBySequence{
+  ASC_ORDER_BY,
+  DESC_ORDER_BY,
+};
+enum ConditionValueType{
+  VALUE_TYPE,
+  ATTR_TYPE,
+  VALUE_LIST_TYPE,
+  SUB_SELECT_TYPE,
+  EXPR_TYPE,
+};
 /**
  * @brief 表示一个条件比较
  * @ingroup SQLParser
@@ -77,17 +106,32 @@ enum CompOp
  */
 struct ConditionSqlNode
 {
-  int             left_is_attr;    ///< TRUE if left-hand side is an attribute
+  ConditionValueType             left_type;    ///< TRUE if left-hand side is an attribute
                                    ///< 1时，操作符左边是属性名，0时，是属性值
   Value           left_value;      ///< left-hand side value if left_is_attr = FALSE
   RelAttrSqlNode  left_attr;       ///< left-hand side attribute
+  SelectSqlNode  * left_select;
+  std::vector<Value> left_value_list;
+  Expression* left_expr;
+  std::vector<RelAttrSqlNode> left_relAttrSqlNodes;
+  std::vector<FieldExpr*>left_fieldExprs;
   CompOp          comp;            ///< comparison operator
-  int             right_is_attr;   ///< TRUE if right-hand side is an attribute
+  ConditionValueType             right_type;   ///< TRUE if right-hand side is an attribute
                                    ///< 1时，操作符右边是属性名，0时，是属性值
   RelAttrSqlNode  right_attr;      ///< right-hand side attribute if right_is_attr = TRUE 右边的属性
   Value           right_value;     ///< right-hand side value if right_is_attr = FALSE
-};
+  SelectSqlNode  * right_select;
+  std::vector<Value> right_value_list;
+  Expression* right_expr;
+  std::vector<RelAttrSqlNode> right_relAttrSqlNodes;
+  std::vector<FieldExpr*>right_fieldExprs;
+  bool   is_conjunction_or=false;
 
+};
+struct OrderBySqlNode{
+  RelAttrSqlNode attrs;
+  OrderBySequence orderBySequence=ASC_ORDER_BY;
+};
 /**
  * @brief 描述一个select语句
  * @ingroup SQLParser
@@ -104,11 +148,22 @@ struct SelectSqlNode
   std::vector<RelAttrSqlNode>     attributes;    ///< attributes in select clause
   std::vector<std::string>        relations;     ///< 查询的表
   std::vector<ConditionSqlNode>   conditions;    ///< 查询条件，使用AND串联起来多个条件
+  std::vector<OrderBySqlNode>     order_by;
+  bool is_sub_select=false;
+  std::unordered_map<std::string, std::string>  alias_map; ///< 别名对应关系 alias->relation_name
+  bool is_alias_right;
+  bool is_expression_select_attr=false;
+  std::vector<Expression*> attributes_expression;
+  std::vector<StringSqlExpr*>stringsqlExprs;//for agg
+  std::vector<FieldExpr*>fieldExprs; //for normal select
+
 };
 struct InnerJoinSqlNode
 {
   std::vector<std::string>        relations;     ///< 查询的表
   std::vector<ConditionSqlNode>   conditions;    ///< 查询条件，使用AND串联起来多个条件
+  std::unordered_map<std::string, std::string>  alias_map; ///< 别名对应关系 alias->relation_name
+  bool is_alias_right=true;
 };
 /**
  * @brief 算术表达式计算的语法树
@@ -170,6 +225,7 @@ struct AttrInfoSqlNode
   AttrType    type;       ///< Type of attribute
   std::string name;       ///< Attribute name
   size_t      length;     ///< Length of attribute
+  bool        is_null;
 };
 
 /**

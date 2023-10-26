@@ -31,7 +31,9 @@ public:
       : table_(table), readonly_(readonly)
   {}
 
-  virtual ~TableScanPhysicalOperator() = default;
+  virtual ~TableScanPhysicalOperator() {
+    globe_current_rows.erase(table_->name());
+  }
 
   std::string param() const override;
 

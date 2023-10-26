@@ -18,7 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/clog/clog.h"
 #include "storage/db/db.h"
 #include "storage/clog/clog.h"
-
+#include "storage/index/index.h"
 using namespace std;
 
 MvccTrxKit::~MvccTrxKit()
@@ -134,6 +134,7 @@ MvccTrx::~MvccTrx()
 
 RC MvccTrx::insert_record(Table *table, Record &record)
 {
+
   Field begin_field;
   Field end_field;
   trx_fields(table, begin_field, end_field);
@@ -151,18 +152,116 @@ RC MvccTrx::insert_record(Table *table, Record &record)
   ASSERT(rc == RC::SUCCESS, "failed to append insert record log. trx id=%d, table id=%d, rid=%s, record len=%d, rc=%s",
       trx_id_, table->table_id(), record.rid().to_string().c_str(), record.len(), strrc(rc));
 
-  pair<OperationSet::iterator, bool> ret = 
-        operations_.insert(Operation(Operation::Type::INSERT, table, record.rid()));
-  if (!ret.second) {
+
+  operations_.push_back(Operation(Operation::Type::INSERT, table, record.rid()));
+  /*if (!ret.second) {
     rc = RC::INTERNAL;
     LOG_WARN("failed to insert operation(insertion) into operation set: duplicate");
-  }
+  }*/
   return rc;
 }
 
 RC MvccTrx::update_record(Table *table, Record &record, std::vector<const FieldMeta *>field_meta, std::vector<Value> value)
 {
-  return RC::UNIMPLENMENT;
+  Record newRecord;
+  char *tmp = (char *)malloc(record.len());
+  memcpy(tmp, record.data(), record.len());
+  newRecord.set_data_owner(tmp,record.len());
+  int null_bitmap_len = align8(table->table_meta().field_num()-table->table_meta().sys_field_num()) / 8;
+  int null_bitmap_start=table->table_meta().field(table->table_meta().sys_field_num())->offset()-null_bitmap_len;
+  common::Bitmap null_bitmap(newRecord.data()+null_bitmap_start,null_bitmap_len);
+  for(int i=0;i<field_meta.size();i++){
+    size_t copy_len = field_meta[i]->len();
+    if(value[i].attr_type()==NULLS){
+      null_bitmap.set_bit(table->table_meta().find_field_index_by_name(field_meta[i]->name())-table->table_meta().sys_field_num());
+    }else {
+      if (field_meta[i]->type() == CHARS) {
+        const size_t data_len = strlen((const char *)value[i].data());
+        if (copy_len > data_len) {
+          copy_len = data_len + 1;
+        }
+      }
+      null_bitmap.clear_bit(table->table_meta().find_field_index_by_name(field_meta[i]->name()-table->table_meta().sys_field_num()));
+      memcpy(newRecord.data() + field_meta[i]->offset(), value[i].data(), copy_len);
+    }
+  }
+  const int field_num=table->table_meta().field_num()-table->table_meta().sys_field_num();
+  std::vector<IndexMeta>indexMeta=table->get_all_index_meta();
+  for(int i=0;i<indexMeta.size();i++){
+    if(indexMeta[i].is_unique()){
+      Index* index=table->find_index(indexMeta[i].name());
+      int null_bitmap_len = align8(field_num) / 8;
+      int null_bitmap_start=table->table_meta().field(table->table_meta().sys_field_num())->offset()-null_bitmap_len;
+      common::Bitmap null_bitmap(record.data()+null_bitmap_start,null_bitmap_len);
+      bool is_null=false;
+      for(int x=0;x<index->field_meta().size();x++){
+        if(null_bitmap.get_bit(table->table_meta().find_field_index_by_name(index->field_meta()[x].name())-table->table_meta().sys_field_num())){
+          is_null=true;
+          break;
+        }
+      }
+
+      if(is_null){
+        continue;
+      }
+      auto offset=index->field_meta()[0].offset();
+      auto key=newRecord.data()+offset;
+      auto scan=index->create_scanner(key,offset,true,key,offset,true);
+
+      RID rid;
+      for(;;){
+        RC rc=scan->next_entry(&rid);
+        if(rc==RC::SUCCESS&&rid!=record.rid()){
+          Record record1;
+          table->get_record(rid,record1);
+          if(this->visit_record(table,record1, false)==RC::SUCCESS){
+            bool same=true;
+            for(int j=0;j<index->field_meta().size();j++){
+              for(int x=index->field_meta()[j].offset();x<index->field_meta()[j].len()+index->field_meta()[j].offset();x++){
+                if(newRecord.data()[x]!=record1.data()[x]){
+                  same= false;
+                }
+              }
+            }
+            if(same){
+              LOG_WARN("failed to insert  unique. rc=%s", strrc(rc));
+              return RC::INTERNAL;
+            }
+          }
+
+
+        }else{
+          break;
+        }
+      }
+      /* for(;;){
+         RC rc=scan->next_entry(&rid);
+         if(rc==RC::SUCCESS&&rid!=record.rid()){
+           LOG_WARN("failed to insert  unique. rc=%s", strrc(rc));
+           return RC::INTERNAL;
+         }else{
+           break;
+         }
+       }*/
+
+    }
+  }
+  // delete
+  RC rc = this->delete_record(table,record);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("delete op in update failed.");
+    return rc;
+  }
+
+
+  // insert
+  rc = this->insert_record(table,newRecord);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("insert op in update failed.");
+    return rc;
+  }
+
+  return RC::SUCCESS;
 }
 
 RC MvccTrx::delete_record(Table * table, Record &record)
@@ -185,7 +284,7 @@ RC MvccTrx::delete_record(Table * table, Record &record)
   ASSERT(rc == RC::SUCCESS, "failed to append delete record log. trx id=%d, table id=%d, rid=%s, record len=%d, rc=%s",
       trx_id_, table->table_id(), record.rid().to_string().c_str(), record.len(), strrc(rc));
 
-  operations_.insert(Operation(Operation::Type::DELETE, table, record.rid()));
+  operations_.push_back(Operation(Operation::Type::DELETE, table, record.rid()));
 
   return RC::SUCCESS;
 }
@@ -206,7 +305,14 @@ RC MvccTrx::visit_record(Table *table, Record &record, bool readonly)
     } else {
       rc = RC::RECORD_INVISIBLE;
     }
-  } else if (begin_xid < 0) {
+  } else if(begin_xid<0 &&end_xid<0){
+    if(readonly){
+      rc=RC::RECORD_INVISIBLE;
+    }else{
+      rc = (-begin_xid == trx_id_) ? RC::RECORD_INVISIBLE :RC::LOCKED_CONCURRENCY_CONFLICT  ;
+    }
+
+  }else if (begin_xid < 0) {
     // begin xid 小于0说明是刚插入而且没有提交的数据
     rc = (-begin_xid == trx_id_) ? RC::SUCCESS : RC::RECORD_INVISIBLE;
   } else if (end_xid < 0) {
@@ -427,7 +533,7 @@ RC MvccTrx::redo(Db *db, const CLogRecord &log_record)
                  table->name(), log_record.to_string().c_str(), strrc(rc));
         return rc;
       }
-      operations_.insert(Operation(Operation::Type::INSERT, table, record.rid()));
+      operations_.push_back(Operation(Operation::Type::INSERT, table, record.rid()));
     } break;
 
     case CLogType::DELETE: {
@@ -449,7 +555,7 @@ RC MvccTrx::redo(Db *db, const CLogRecord &log_record)
       ASSERT(rc == RC::SUCCESS, "failed to get record while committing. rid=%s, rc=%s",
              data_record.rid_.to_string().c_str(), strrc(rc));
       
-      operations_.insert(Operation(Operation::Type::DELETE, table, data_record.rid_));
+      operations_.push_back(Operation(Operation::Type::DELETE, table, data_record.rid_));
     } break;
 
     case CLogType::MTR_COMMIT: {

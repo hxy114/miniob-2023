@@ -77,8 +77,8 @@ QUOTE            [\'\"]
 {WHITE_SAPCE}                                        // ignore whitespace
 \n                                                   ;
 
-[\-]?{DIGIT}+                           yylval->number=atoi(yytext); RETURN_TOKEN(NUMBER);
-[\-]?{DIGIT}+{DOT}{DIGIT}+              yylval->floats=(float)(atof(yytext)); RETURN_TOKEN(FLOAT);
+{DIGIT}+                           yylval->number=atoi(yytext); RETURN_TOKEN(NUMBER);
+{DIGIT}+{DOT}{DIGIT}+              yylval->floats=(float)(atof(yytext)); RETURN_TOKEN(FLOAT);
 
 ";"                                     RETURN_TOKEN(SEMICOLON);
 {DOT}                                   RETURN_TOKEN(DOT);
@@ -125,6 +125,15 @@ avg                                     RETURN_TOKEN(AVG_agg);
 count                                   RETURN_TOKEN(COUNT_agg);
 sum                                     RETURN_TOKEN(SUM_agg);
 unique                                  RETURN_TOKEN(UNIQUE);
+null                                    RETURN_TOKEN(NULLABLE);
+is                                      RETURN_TOKEN(IS);
+order                                   RETURN_TOKEN(ORDER);
+by                                      RETURN_TOKEN(BY);
+asc                                     RETURN_TOKEN(ASC);
+in                                      RETURN_TOKEN(IN);
+exists                                  RETURN_TOKEN(EXISTS);
+or                                      RETURN_TOKEN(OR);
+as                                      RETURN_TOKEN(AS);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     RETURN_TOKEN(RBRACE);

@@ -24,7 +24,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/value.h"
 #include "sql/expr/expression.h"
 #include "storage/record/record.h"
-
+#include "storage/record/record_manager.h"
+#include "common/lang/bitmap.h"
 class Table;
 
 /**
@@ -107,6 +108,7 @@ public:
    * @param[out] cell 返回的cell
    */
   virtual RC find_cell(const TupleCellSpec &spec, Value &cell) const = 0;
+  virtual RC find_cell(const std::string sql_string,Value &cell)const{return RC::INTERNAL;}
 
   virtual std::string to_string() const
   {
@@ -139,10 +141,10 @@ public:
   RowTuple() = default;
   virtual ~RowTuple()
   {
-    for (FieldExpr *spec : speces_) {
+    /*for (FieldExpr *spec : speces_) {
       delete spec;
     }
-    speces_.clear();
+    speces_.clear();*/
   }
 
   void set_record(Record *record)
@@ -153,7 +155,12 @@ public:
   void set_schema(const Table *table, const std::vector<FieldMeta> *fields)
   {
     table_ = table;
-    this->speces_.reserve(fields->size());
+    for (FieldExpr *spec : speces_) {
+      delete spec;
+    }
+    speces_.clear();
+
+    //this->speces_.resize(fields->size());
     for (const FieldMeta &field : *fields) {
       speces_.push_back(new FieldExpr(table, &field));
     }
@@ -172,9 +179,18 @@ public:
     }
 
     FieldExpr *field_expr = speces_[index];
+    const int normal_field_start_index = table_->table_meta().sys_field_num();
     const FieldMeta *field_meta = field_expr->field().meta();
-    cell.set_type(field_meta->type());
-    cell.set_data(this->record_->data() + field_meta->offset(), field_meta->len());
+    int null_bitmap_len = align8(speces_.size()-normal_field_start_index) / 8;
+    int null_bitmap_start=speces_[normal_field_start_index]->field().meta()->offset()-null_bitmap_len;
+    common::Bitmap null_bitmap(this->record_->data()+null_bitmap_start,null_bitmap_len);
+    if(null_bitmap.get_bit(index)){
+      cell.set_null();
+    }else{
+      cell.set_type(field_meta->type());
+      cell.set_data(this->record_->data() + field_meta->offset(), field_meta->len());
+    }
+
     return RC::SUCCESS;
   }
 
@@ -331,7 +347,50 @@ public:
 private:
   const std::vector<std::unique_ptr<Expression>> &expressions_;
 };
+class ValueListForExpTuple:public  Tuple{
+public:
+  ValueListForExpTuple() = default;
+  ValueListForExpTuple(std::vector<std::string> sql_strings):sql_strings_(sql_strings)
+  {}
+  virtual ~ValueListForExpTuple() = default;
 
+  void set_cells( Tuple *cells)
+  {
+    cells_ = cells;
+  }
+
+  virtual int cell_num() const override
+  {
+    return static_cast<int>(sql_strings_.size());
+  }
+
+  virtual RC cell_at(int index, Value &cell) const override
+  {
+    if (index < 0 || index >= cell_num()) {
+      return RC::NOTFOUND;
+    }
+
+    return  cells_->cell_at(index,cell);
+
+  }
+
+  virtual RC find_cell(const TupleCellSpec &spec, Value &cell) const override
+  {
+    return RC::INTERNAL;
+  }
+  virtual RC find_cell(const std::string sql_string,Value &cell)const override{
+    for(int i=0;i<sql_strings_.size();i++){
+      if(sql_string.compare(sql_strings_[i])==0){
+        return cells_->cell_at(i,cell);
+      }
+    }
+    return RC::NOTFOUND;
+  }
+
+private:
+  std::vector<std::string >sql_strings_;
+  Tuple * cells_;
+};
 /**
  * @brief 一些常量值组成的Tuple
  * @ingroup Tuple

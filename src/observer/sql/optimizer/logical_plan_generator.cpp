@@ -25,6 +25,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/join_logical_operator.h"
 #include "sql/operator/explain_logical_operator.h"
 #include "sql/operator/agg_logical_operator.h"
+#include "sql/operator/order_logical_operator.h"
 
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/calc_stmt.h"
@@ -93,6 +94,7 @@ RC LogicalPlanGenerator::create_plan(
   const std::vector<RelAttrSqlNode> &all_attributes=select_stmt->attributes();
   bool is_agg=select_stmt->is_agg();
 
+  std::unordered_map<std::string, std::string> alias_map(select_stmt->alias_map());
   for (Table *table : tables) {
   /*  std::vector<Field> fields;
     for (const Field &field : all_fields) {
@@ -113,7 +115,6 @@ RC LogicalPlanGenerator::create_plan(
   }
 
 
-
   unique_ptr<LogicalOperator> predicate_oper;
   RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
   if (rc != RC::SUCCESS) {
@@ -122,7 +123,7 @@ RC LogicalPlanGenerator::create_plan(
   }
 
   if(is_agg){
-    unique_ptr<LogicalOperator> agg_oper(new AggLogicalOperator(all_attributes,all_fields));
+    unique_ptr<LogicalOperator> agg_oper(new AggLogicalOperator(all_attributes,all_fields,select_stmt->expression()));
     if (predicate_oper) {
       if (table_oper) {
         predicate_oper->add_child(std::move(table_oper));
@@ -137,19 +138,43 @@ RC LogicalPlanGenerator::create_plan(
     logical_operator.swap(agg_oper);
     return RC::SUCCESS;
   }else{
-    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields));
-    if (predicate_oper) {
-      if (table_oper) {
-        predicate_oper->add_child(std::move(table_oper));
-      }
-      project_oper->add_child(std::move(predicate_oper));
-    } else {
-      if (table_oper) {
-        project_oper->add_child(std::move(table_oper));
-      }
+    std::unordered_map<std::string, std::string> col_alias_map = select_stmt->col_alias_map();
+    unique_ptr<LogicalOperator> order_oper(nullptr);
+    if(select_stmt->order_by_fields().size()>0){
+      unique_ptr<LogicalOperator> order_oper_tmp(new OrderLogicalOperator(select_stmt->order_by_fields(),select_stmt->order_by_sequences(),all_fields));
+      order_oper= std::move(order_oper_tmp);
     }
 
-    logical_operator.swap(project_oper);
+    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields, col_alias_map, alias_map,select_stmt->expression()));
+    if(order_oper){
+      if (predicate_oper) {
+        if (table_oper) {
+          predicate_oper->add_child(std::move(table_oper));
+        }
+        project_oper->add_child(std::move(predicate_oper));
+      } else {
+        if (table_oper) {
+          project_oper->add_child(std::move(table_oper));
+        }
+      }
+      order_oper->add_child(std::move(project_oper));
+      logical_operator.swap(order_oper);
+    }else{
+      if (predicate_oper) {
+        if (table_oper) {
+          predicate_oper->add_child(std::move(table_oper));
+        }
+        project_oper->add_child(std::move(predicate_oper));
+      } else {
+        if (table_oper) {
+          project_oper->add_child(std::move(table_oper));
+        }
+      }
+      logical_operator.swap(project_oper);
+    }
+
+
+
     return RC::SUCCESS;
 
   }
@@ -162,25 +187,57 @@ RC LogicalPlanGenerator::create_plan(
   std::vector<unique_ptr<Expression>> cmp_exprs;
   const std::vector<FilterUnit *> &filter_units = filter_stmt->filter_units();
   for (const FilterUnit *filter_unit : filter_units) {
-    const FilterObj &filter_obj_left = filter_unit->left();
-    const FilterObj &filter_obj_right = filter_unit->right();
+    if(filter_unit->comp()==EXISTS_OP||filter_unit->comp()==NOT_EXISTS_OP){
+      const FilterObj &filter_obj_right = filter_unit->right();
+      unique_ptr<Expression> right(static_cast<Expression *>(new SubSelectExpr(filter_obj_right.select)));
+      ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), nullptr, std::move(right));
+      cmp_exprs.emplace_back(cmp_expr);
+    }
+    else{
+      const FilterObj &filter_obj_left = filter_unit->left();
+      const FilterObj &filter_obj_right = filter_unit->right();
+      unique_ptr<Expression> left,right;
+      if(filter_obj_left.filter_type_==VALUE_TYPE){
+       left= std::unique_ptr<Expression >(static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
+      }else if(filter_obj_left.filter_type_==ATTR_TYPE){
+       left=std::unique_ptr<Expression >(static_cast<Expression *>(new FieldExpr(filter_obj_left.field)));
+      }else if(filter_obj_left.filter_type_==SUB_SELECT_TYPE){
+       left=std::unique_ptr<Expression >(static_cast<Expression *>(new SubSelectExpr(filter_obj_left.select)));
+      }else if(filter_obj_left.filter_type_==VALUE_LIST_TYPE){
+       left=std::unique_ptr<Expression>(static_cast<Expression*>(new ValueListExpr(filter_obj_left.value_list)));
+      }else if(filter_obj_left.filter_type_==EXPR_TYPE){
+       left.reset(filter_obj_left.expression);
+      }
 
-    unique_ptr<Expression> left(filter_obj_left.is_attr
-                                         ? static_cast<Expression *>(new FieldExpr(filter_obj_left.field))
-                                         : static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
+      if(filter_obj_right.filter_type_==VALUE_TYPE){
+       right=std::unique_ptr<Expression >(static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
+      }else if(filter_obj_right.filter_type_==ATTR_TYPE){
+       right=std::unique_ptr<Expression >(static_cast<Expression *>(new FieldExpr(filter_obj_right.field)));
+      }else if(filter_obj_right.filter_type_==SUB_SELECT_TYPE){
+       right=std::unique_ptr<Expression >(static_cast<Expression *>(new SubSelectExpr(filter_obj_right.select)));
+      }else if(filter_obj_right.filter_type_==VALUE_LIST_TYPE){
+       right=std::unique_ptr<Expression>(static_cast<Expression*>(new ValueListExpr(filter_obj_right.value_list)));
+      }else if(filter_obj_right.filter_type_==EXPR_TYPE){
+       right.reset(filter_obj_right.expression);
+      }
 
-    unique_ptr<Expression> right(filter_obj_right.is_attr
-                                          ? static_cast<Expression *>(new FieldExpr(filter_obj_right.field))
-                                          : static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
 
-    ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
-    cmp_exprs.emplace_back(cmp_expr);
+      ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
+      cmp_exprs.emplace_back(cmp_expr);
+    }
+
   }
 
   unique_ptr<PredicateLogicalOperator> predicate_oper;
   if (!cmp_exprs.empty()) {
-    unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
-    predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
+    if(filter_stmt->is_and()){
+      unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
+      predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
+    }else{
+      unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::OR, cmp_exprs));
+      predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
+    }
+
   }
 
   logical_operator = std::move(predicate_oper);

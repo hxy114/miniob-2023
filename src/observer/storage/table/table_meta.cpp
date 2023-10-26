@@ -19,7 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "json/json.h"
 #include "common/log/log.h"
 #include "storage/trx/trx.h"
-
+#include "common/lang/bitmap.h"
 using namespace std;
 
 static const Json::StaticString FIELD_TABLE_ID("table_id");
@@ -73,11 +73,13 @@ RC TableMeta::init(int32_t table_id, const char *name, int field_num, const Attr
   } else {
     fields_.resize(field_num);
   }
-
+  // 将每个null_bitmap放在record头部,将每个字段的offset加上null_bitmap_size
+  int null_bitmap_len = align8(field_num) / 8;
+  field_offset=field_offset+null_bitmap_len;
   for (int i = 0; i < field_num; i++) {
     const AttrInfoSqlNode &attr_info = attributes[i];
     rc = fields_[i + trx_field_num].init(attr_info.name.c_str(), 
-            attr_info.type, field_offset, attr_info.length, true/*visible*/);
+            attr_info.type, field_offset, attr_info.length, true/*visible*/,attr_info.is_null);
     if (rc != RC::SUCCESS) {
       LOG_ERROR("Failed to init field meta. table name=%s, field name: %s", name, attr_info.name.c_str());
       return rc;
@@ -140,6 +142,14 @@ const FieldMeta *TableMeta::find_field_by_offset(int offset) const
     }
   }
   return nullptr;
+}
+int TableMeta::find_field_index_by_name(const char *name)const{
+  for (int i=0;i<fields_.size();i++) {
+    if (strcmp(fields_[i].name() , name)==0) {
+      return i;
+    }
+  }
+  return -1;
 }
 int TableMeta::field_num() const
 {
@@ -281,8 +291,8 @@ int TableMeta::deserialize(std::istream &is)
   table_id_ = table_id;
   name_.swap(table_name);
   fields_.swap(fields);
-  record_size_ = fields_.back().offset() + fields_.back().len() - fields_.begin()->offset();
-
+  //record_size_ = fields_.back().offset() + fields_.back().len() - fields_.begin()->offset();
+  record_size_ = fields_.back().offset() + fields_.back().len() ;
   const Json::Value &indexes_value = table_value[FIELD_INDEXES];
   if (!indexes_value.empty()) {
     if (!indexes_value.isArray()) {
