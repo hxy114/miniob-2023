@@ -158,7 +158,8 @@ public:
     if (func_ == LENGTH_FUNC) return INTS;
     else if (func_ == ROUND_FUNC && roundparam_.bits.length() == 0) return INTS;
     else if (func_ == ROUND_FUNC && roundparam_.bits.length() != 0) return FLOATS;
-    else if (func_ == FORMAT_FUNC) return CHARS; 
+    else if (func_ == FORMAT_FUNC) return CHARS;
+    return UNDEFINED;
   }
 
   Field &field() { return field_; }
