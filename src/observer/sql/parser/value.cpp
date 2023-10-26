@@ -19,11 +19,11 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/comparator.h"
 #include "common/lang/string.h"
 
-const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "ints", "floats", "dates","booleans"};
+const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "ints", "floats", "dates","texts","booleans"};
 
 const char *attr_type_to_string(AttrType type)
 {
-  if (type >= UNDEFINED && type <= DATES) {
+  if (type >= UNDEFINED && type <= TEXTS) {
     return ATTR_TYPE_NAME[type];
   }
   return "unknown";
@@ -84,6 +84,11 @@ void Value::set_data(char *data, int length)
       num_value_.bool_value_ = *(int *)data != 0;
       length_ = length;
     } break;
+    case TEXTS:{
+      text_=*(unsigned  long long *)data;
+      length_-length;
+
+    }
     default: {
       LOG_WARN("unknown data type: %d", attr_type_);
     } break;
@@ -95,7 +100,11 @@ void Value::set_int(int val)
   num_value_.int_value_ = val;
   length_ = sizeof(val);
 }
-
+void Value::set_text(char *text){
+  attr_type_=TEXTS;
+  text_=reinterpret_cast<unsigned long long int>(text);
+  length_=8;
+}
 void Value::set_float(float val)
 {
   attr_type_ = FLOATS;
@@ -149,17 +158,29 @@ void Value::set_value(const Value &value)
     case BOOLEANS: {
       set_boolean(value.get_boolean());
     } break;
+    case TEXTS:{
+      set_text(reinterpret_cast<char *>(value.text_));
+    } break;
+    case NULLS:{
+      set_null();
+    } break;
     case UNDEFINED: {
       ASSERT(false, "got an invalid value type");
     } break;
   }
 }
+void Value::set_null(){
 
+  attr_type_=NULLS;
+}
 const char *Value::data() const
 {
   switch (attr_type_) {
     case CHARS:case DATES :{
       return str_value_.c_str();
+    } break;
+    case TEXTS:{
+      return (const char *)&text_;
     } break;
     default: {
       return (const char *)&num_value_;
@@ -182,6 +203,9 @@ std::string Value::to_string() const
     } break;
     case CHARS: {
       os << str_value_;
+    } break;
+    case TEXTS:{
+      os<<reinterpret_cast<const char *>(text_);
     } break;
     case DATES: {
       int i = 0;
@@ -220,8 +244,10 @@ std::string Value::to_string() const
         os << '0';
         os << data_[i];
       }
-    }
-      break;
+    }break;
+    case NULLS:{
+      os<<"NULL";
+    }break;
     default: {
       LOG_WARN("unsupported attr type: %d", attr_type_);
     } break;
@@ -251,9 +277,15 @@ int Value::compare(const Value &other) const
             (void *)other.str_value_.c_str()
             );
       } break;
+      case TEXTS:{
+        return common::compare_string(reinterpret_cast<char*>(this->text_),
+            strlen(reinterpret_cast<char*>(this->text_)),
+            reinterpret_cast<char*>(other.text_),
+            strlen(reinterpret_cast<char*>(other.text_)));
+      }break;
       case BOOLEANS: {
         return common::compare_int((void *)&this->num_value_.bool_value_, (void *)&other.num_value_.bool_value_);
-      }
+      } break;
       default: {
         LOG_WARN("unsupported type: %d", this->attr_type_);
       }
@@ -282,6 +314,16 @@ int Value::compare(const Value &other) const
     float f=common::string2float(this->str_value_);
     return common::compare_float(&f,(void *)&other.num_value_.float_value_);
 
+  }else if(this->attr_type_==CHARS&&other.attr_type_==TEXTS){
+    return common::compare_string((void *)this->str_value_.c_str(),
+        this->str_value_.length(),
+        reinterpret_cast<char*>(other.text_),
+        strlen(reinterpret_cast<char*>(other.text_)));
+  } else if(this->attr_type_==TEXTS&&other.attr_type_==CHARS){
+    return common::compare_string(reinterpret_cast<char*>(this->text_),
+        strlen(reinterpret_cast<char*>(this->text_)),
+        (void *)other.str_value_.c_str(),
+        other.str_value_.length());
   }
   LOG_WARN("not supported");
   return -1;  // TODO return rc?

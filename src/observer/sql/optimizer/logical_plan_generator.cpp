@@ -25,6 +25,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/join_logical_operator.h"
 #include "sql/operator/explain_logical_operator.h"
 #include "sql/operator/agg_logical_operator.h"
+#include "sql/operator/order_logical_operator.h"
 
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/calc_stmt.h"
@@ -94,7 +95,6 @@ RC LogicalPlanGenerator::create_plan(
   bool is_agg=select_stmt->is_agg();
 
   std::unordered_map<std::string, std::string> alias_map(select_stmt->alias_map());
-
   for (Table *table : tables) {
   /*  std::vector<Field> fields;
     for (const Field &field : all_fields) {
@@ -114,6 +114,7 @@ RC LogicalPlanGenerator::create_plan(
     }
   }
 
+
   unique_ptr<LogicalOperator> predicate_oper;
   RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
   if (rc != RC::SUCCESS) {
@@ -122,7 +123,7 @@ RC LogicalPlanGenerator::create_plan(
   }
 
   if(is_agg){
-    unique_ptr<LogicalOperator> agg_oper(new AggLogicalOperator(all_attributes,all_fields));
+    unique_ptr<LogicalOperator> agg_oper(new AggLogicalOperator(all_attributes,all_fields,select_stmt->expression()));
     if (predicate_oper) {
       if (table_oper) {
         predicate_oper->add_child(std::move(table_oper));
@@ -138,20 +139,15 @@ RC LogicalPlanGenerator::create_plan(
     return RC::SUCCESS;
   }else{
     std::unordered_map<std::string, std::string> col_alias_map = select_stmt->col_alias_map();
-    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields, col_alias_map, alias_map, select_stmt->all_expressions()));
-
-    bool without_table_query = table_oper ? false : true;  //无表查询判断
-    if (predicate_oper) {
-      if (table_oper) {
-        predicate_oper->add_child(std::move(table_oper));
-      }
-      project_oper->add_child(std::move(predicate_oper));
-    } else {
-      if (table_oper) {
-        project_oper->add_child(std::move(table_oper));
-      }
+    unique_ptr<LogicalOperator> order_oper(nullptr);
+    if(select_stmt->order_by_fields().size()>0){
+      unique_ptr<LogicalOperator> order_oper_tmp = unique_ptr<LogicalOperator>(static_cast<LogicalOperator *>(new OrderLogicalOperator(select_stmt->order_by_fields(),select_stmt->order_by_sequences(),all_fields)));
+      // unique_ptr<LogicalOperator> order_oper_tmp(new OrderLogicalOperator(select_stmt->order_by_fields(),select_stmt->order_by_sequences(),all_fields));
+      order_oper = std::move(order_oper_tmp);
     }
-    
+
+    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields, col_alias_map, alias_map,select_stmt->expression(), select_stmt->all_expressions()));
+    bool without_table_query = table_oper ? false : true;  //无表查询判断
     // 无表查询
     if (without_table_query) {
       for (auto &attribute:all_attributes) {
@@ -178,10 +174,35 @@ RC LogicalPlanGenerator::create_plan(
         
         project_oper->add_expression(std::move(cur));
       }
-      
     }
 
-    logical_operator.swap(project_oper);
+    if(order_oper){
+      if (predicate_oper) {
+        if (table_oper) {
+          predicate_oper->add_child(std::move(table_oper));
+        }
+        project_oper->add_child(std::move(predicate_oper));
+      } else {
+        if (table_oper) {
+          project_oper->add_child(std::move(table_oper));
+        }
+      }
+      order_oper->add_child(std::move(project_oper));
+      logical_operator.swap(order_oper);
+    }else{
+      if (predicate_oper) {
+        if (table_oper) {
+          predicate_oper->add_child(std::move(table_oper));
+        }
+        project_oper->add_child(std::move(predicate_oper));
+      } else {
+        if (table_oper) {
+          project_oper->add_child(std::move(table_oper));
+        }
+      }
+      logical_operator.swap(project_oper);
+    }
+
     return RC::SUCCESS;
 
   }
@@ -194,66 +215,91 @@ RC LogicalPlanGenerator::create_plan(
   std::vector<unique_ptr<Expression>> cmp_exprs;
   const std::vector<FilterUnit *> &filter_units = filter_stmt->filter_units();
   for (const FilterUnit *filter_unit : filter_units) {
-    const FilterObj &filter_obj_left = filter_unit->left();
-    const FilterObj &filter_obj_right = filter_unit->right();
+    if(filter_unit->comp()==EXISTS_OP||filter_unit->comp()==NOT_EXISTS_OP){
+      const FilterObj &filter_obj_right = filter_unit->right();
+      unique_ptr<Expression> right(static_cast<Expression *>(new SubSelectExpr(filter_obj_right.select)));
+      ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), nullptr, std::move(right));
+      cmp_exprs.emplace_back(cmp_expr);
+    }
+    else{
+      const FilterObj &filter_obj_left = filter_unit->left();
+      const FilterObj &filter_obj_right = filter_unit->right();
+      unique_ptr<Expression> left,right;
+      if(filter_obj_left.filter_type_==VALUE_TYPE){
+       left= std::unique_ptr<Expression>(static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
+      }else if(filter_obj_left.filter_type_==ATTR_TYPE){
+        if (filter_obj_left.func_ != NO_FUNC) {
+          switch (filter_obj_left.func_)
+          {
+          case LENGTH_FUNC:
+            left = std::unique_ptr<Expression>(static_cast<Expression *>(new FuncExpr(filter_obj_left.field,LENGTH_FUNC,filter_obj_left.lengthparam_)));
+            break;
+          case ROUND_FUNC:
+            left = std::unique_ptr<Expression>(static_cast<Expression *>(new FuncExpr(filter_obj_left.field,ROUND_FUNC,filter_obj_left.roundparam_)));
+            break;
+          case FORMAT_FUNC:
+            left = std::unique_ptr<Expression>(static_cast<Expression *>(new FuncExpr(filter_obj_left.field,FORMAT_FUNC,filter_obj_left.formatparam_)));
+            break;
+          default:
+            return RC::UNIMPLENMENT;
+          }          
+        } else {
+          left=std::unique_ptr<Expression>(static_cast<Expression *>(new FieldExpr(filter_obj_left.field)));
+        }
+      }else if(filter_obj_left.filter_type_==SUB_SELECT_TYPE){
+       left=std::unique_ptr<Expression>(static_cast<Expression *>(new SubSelectExpr(filter_obj_left.select)));
+      }else if(filter_obj_left.filter_type_==VALUE_LIST_TYPE){
+       left=std::unique_ptr<Expression>(static_cast<Expression*>(new ValueListExpr(filter_obj_left.value_list)));
+      }else if(filter_obj_left.filter_type_==EXPR_TYPE){
+       left.reset(filter_obj_left.expression);
+      }
 
-    Expression *left;
-    if (filter_obj_left.is_attr) {
-      if (filter_obj_left.func_ != NO_FUNC) {
-        switch (filter_obj_left.func_)
-        {
-        case LENGTH_FUNC:
-          left = static_cast<Expression *>(new FuncExpr(filter_obj_left.field,LENGTH_FUNC,filter_obj_left.lengthparam_));
-          break;
-        case ROUND_FUNC:
-          left = static_cast<Expression *>(new FuncExpr(filter_obj_left.field,ROUND_FUNC,filter_obj_left.roundparam_));
-          break;
-        case FORMAT_FUNC:
-          left = static_cast<Expression *>(new FuncExpr(filter_obj_left.field,FORMAT_FUNC,filter_obj_left.formatparam_));
-          break;
-        default:
-          return RC::UNIMPLENMENT;
-        }
-      } else {
-        left = static_cast<Expression *>(new FieldExpr(filter_obj_left.field));
+      if(filter_obj_right.filter_type_==VALUE_TYPE){
+       right=std::unique_ptr<Expression>(static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
+      }else if(filter_obj_right.filter_type_==ATTR_TYPE){
+        if (filter_obj_right.func_ != NO_FUNC) {
+          switch (filter_obj_right.func_)
+          {
+          case LENGTH_FUNC:
+            right = std::unique_ptr<Expression>(static_cast<Expression *>(new FuncExpr(filter_obj_right.field,LENGTH_FUNC,filter_obj_right.lengthparam_)));
+            break;
+          case ROUND_FUNC:
+            right = std::unique_ptr<Expression>(static_cast<Expression *>(new FuncExpr(filter_obj_right.field,ROUND_FUNC,filter_obj_right.roundparam_)));
+            break;
+          case FORMAT_FUNC:
+            right = std::unique_ptr<Expression>(static_cast<Expression *>(new FuncExpr(filter_obj_right.field,FORMAT_FUNC,filter_obj_right.formatparam_)));
+            break;
+          default:
+            return RC::UNIMPLENMENT;
+          }          
+        } else {
+          right=std::unique_ptr<Expression>(static_cast<Expression *>(new FieldExpr(filter_obj_right.field)));
+        } 
+      }else if(filter_obj_right.filter_type_==SUB_SELECT_TYPE){
+       right=std::unique_ptr<Expression>(static_cast<Expression *>(new SubSelectExpr(filter_obj_right.select)));
+      }else if(filter_obj_right.filter_type_==VALUE_LIST_TYPE){
+       right=std::unique_ptr<Expression>(static_cast<Expression*>(new ValueListExpr(filter_obj_right.value_list)));
+      }else if(filter_obj_right.filter_type_==EXPR_TYPE){
+       right.reset(filter_obj_right.expression);
       }
-    } else {
-      left = static_cast<Expression *>(new ValueExpr(filter_obj_left.value));   
+
+
+      ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
+      cmp_exprs.emplace_back(cmp_expr);
     }
-    Expression *right;
-    if (filter_obj_right.is_attr) {
-      if (filter_obj_right.func_ != NO_FUNC) {
-        switch (filter_obj_right.func_)
-        {
-        case LENGTH_FUNC:
-          right = static_cast<Expression *>(new FuncExpr(filter_obj_right.field,LENGTH_FUNC,filter_obj_right.lengthparam_));
-          break;
-        case ROUND_FUNC:
-          right = static_cast<Expression *>(new FuncExpr(filter_obj_right.field,ROUND_FUNC,filter_obj_right.roundparam_));
-          break;
-        case FORMAT_FUNC:
-          right = static_cast<Expression *>(new FuncExpr(filter_obj_right.field,FORMAT_FUNC,filter_obj_right.formatparam_));
-          break;
-        default:
-          return RC::UNIMPLENMENT;
-        }
-      } else {
-        right = static_cast<Expression *>(new FieldExpr(filter_obj_right.field));
-      }
-    } else {
-      right = static_cast<Expression *>(new ValueExpr(filter_obj_right.value));   
-    }
-    unique_ptr<Expression> cur_left(left);
-    unique_ptr<Expression> cur_right(right);
-    
-    ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(cur_left), std::move(cur_right));
-    cmp_exprs.emplace_back(cmp_expr);
+
   }
 
   unique_ptr<PredicateLogicalOperator> predicate_oper;
   if (!cmp_exprs.empty()) {
-    unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
-    predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
+    if(filter_stmt->is_and()){
+      unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
+      predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
+    }else{
+      unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::OR, cmp_exprs));
+      predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
+    }
+
   }
 
   logical_operator = std::move(predicate_oper);

@@ -10,7 +10,9 @@ static void match(int year, int month, int day, const std::string monthEnglish[]
     if (strcmp(substr, "%Y") == 0) {
         ss << year;
       } else if (strcmp(substr, "%y") == 0) {
-        ss << (year % 100);
+        int tmp = year % 100;
+        if (tmp < 10) ss << 0;
+        ss << (tmp);
       } else if (strcmp(substr, "%M") == 0) {
         ss << monthEnglish[month];
       } else if (strcmp(substr, "%m") == 0) {

@@ -42,7 +42,7 @@ public:
   }
 
 public:
-  static RC create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt);
+  static RC create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool is_sub_select=false,std::unordered_map<std::string, Table *>top_tables=std::unordered_map<std::string, Table *>());
 
 public:
   const std::vector<Table *> &tables() const
@@ -56,6 +56,18 @@ public:
   const std::vector<RelAttrSqlNode> &attributes() const
   {
     return attributes_;
+  }
+  const std::vector<Field> &order_by_fields()const{
+    return order_by_fields_;
+  }
+  const std::vector<OrderBySequence> &order_by_sequences()const{
+    return  order_by_sequences_;
+  }
+  bool is_sub_select(){
+    return is_sub_select_;
+  }
+  const  std::unordered_map<std::string, Table *>&top_tables()const{
+    return  top_tables_;
   }
   bool is_agg(){
     return is_agg_;
@@ -72,7 +84,13 @@ public:
   {
     return col_alias_map_;
   }
-  std::vector<std::unique_ptr<Expression>> &all_expressions()
+  std::vector<Expression*> &expression(){
+    return attributes_expression_;
+  }
+  bool is_expression_select_attr(){
+    return is_expression_select_attr_;
+  }
+  std::vector<Expression*> &all_expressions()
   {
     return all_expressions_;
   }
@@ -83,7 +101,17 @@ private:
   FilterStmt *filter_stmt_ = nullptr;
   bool is_agg_;
   std::vector<RelAttrSqlNode> attributes_;
-  std::unordered_map<std::string, std::string> alias_map_;  // 别名-->表名
-  std::unordered_map<std::string, std::string> col_alias_map_; // 列名-->别名
-  std::vector<std::unique_ptr<Expression>> all_expressions_;  // select attributes对应的每个表达式，用于project
+  std::vector<Field>order_by_fields_;
+  std::vector<OrderBySequence>order_by_sequences_;
+  bool is_sub_select_;
+  std::unordered_map<std::string, Table *>top_tables_;
+
+  std::unordered_map<std::string, std::string> alias_map_;  //
+  std::unordered_map<std::string, std::string> col_alias_map_;
+
+  bool is_expression_select_attr_;
+  std::vector<Expression*> attributes_expression_;
+  std::vector<Expression*> all_expressions_;  // 用于无表达式无agg情况下的简单查询(Function)
+  //std::vector<StringSqlExpr*>stringsqlExprs;//for agg
+  //std::vector<FieldExpr*>fieldExprs; //for normal select
 };

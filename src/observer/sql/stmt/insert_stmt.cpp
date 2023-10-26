@@ -43,7 +43,7 @@ RC InsertStmt::create(Db *db,  InsertSqlNode &inserts, Stmt *&stmt)
   const int value_num = static_cast<int>(inserts.values.size());
   const TableMeta &table_meta = table->table_meta();
   const int field_num = table_meta.field_num() - table_meta.sys_field_num();
-  if (field_num != value_num) {
+  if (value_num%field_num !=0) {
     LOG_WARN("schema mismatch. value num=%d, field num in schema=%d", value_num, field_num);
     return RC::SCHEMA_FIELD_MISSING;
   }
@@ -51,7 +51,7 @@ RC InsertStmt::create(Db *db,  InsertSqlNode &inserts, Stmt *&stmt)
   // check fields type
   const int sys_field_num = table_meta.sys_field_num();
   for (int i = 0; i < value_num; i++) {
-    const FieldMeta *field_meta = table_meta.field(i + sys_field_num);
+    const FieldMeta *field_meta = table_meta.field((i%field_num) + sys_field_num);
     const AttrType field_type = field_meta->type();
     const AttrType value_type = values[i].attr_type();
     if (field_type != value_type) {  // TODO try to convert the value type to field type
@@ -64,6 +64,12 @@ RC InsertStmt::create(Db *db,  InsertSqlNode &inserts, Stmt *&stmt)
           auto s= common::float2string(values[i].get_float());
           values[i].set_type(CHARS);
           values[i].set_string(s.c_str());
+        }else if(value_type==NULLS){
+          if(!field_meta->is_null()){
+            LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+          }
         }else{
           LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
               table_name, field_meta->name(), field_type, value_type);
@@ -81,6 +87,12 @@ RC InsertStmt::create(Db *db,  InsertSqlNode &inserts, Stmt *&stmt)
           values[i].set_type(INTS);
           values[i].set_int(integer);
 
+        }else if(value_type==NULLS){
+          if(!field_meta->is_null()){
+            LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+          }
         }else{
           LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
               table_name, field_meta->name(), field_type, value_type);
@@ -95,10 +107,38 @@ RC InsertStmt::create(Db *db,  InsertSqlNode &inserts, Stmt *&stmt)
           auto d= common::string2float(values[i].get_string());
           values[i].set_type(FLOATS);
           values[i].set_float(d);
+        }else if(value_type==NULLS){
+          if(!field_meta->is_null()){
+            LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+          }
         }else{
           LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
               table_name, field_meta->name(), field_type, value_type);
           return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        }
+      }else if(field_type==DATES){
+        if(value_type==NULLS){
+          if(!field_meta->is_null()){
+            LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+          }
+        }else{
+          LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+          return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        }
+      }else if(field_type==TEXTS){
+        if(value_type==CHARS){
+          if(values[i].length()>65535){
+            return RC::INVALID_ARGUMENT;
+          }
+          char *text=(char *)malloc(values[i].length()+1);
+          memcpy(text,values[i].get_string().c_str(),values[i].length());
+          text[values[i].length()]='\0';
+          values[i].set_text(text);
         }
       }else{
         LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",

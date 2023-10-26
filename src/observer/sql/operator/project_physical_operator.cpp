@@ -19,7 +19,6 @@ See the Mulan PSL v2 for more details. */
 #include <cmath>
 #include "sql/stmt/utils.h"
 
-
 RC ProjectPhysicalOperator::open(Trx *trx)
 {
   if (children_.empty()) {
@@ -38,6 +37,7 @@ RC ProjectPhysicalOperator::open(Trx *trx)
 
 RC ProjectPhysicalOperator::next()
 {
+  RC rc;
   if (children_.empty() && expressions_.size() == 0) {
     return RC::RECORD_EOF;
   } else if (expressions_.size() != 0) {
@@ -54,7 +54,21 @@ RC ProjectPhysicalOperator::next()
     }
   }
 
-  return children_[0]->next();
+  if(RC::SUCCESS!=(rc=children_[0]->next())){
+    return rc;
+  }else{
+    if(!my_expressions_.empty()){
+      std::vector<Value>values(my_expressions_.size());
+
+      for(int i=0;i<my_expressions_.size();i++){
+        if(my_expressions_[i]->get_value(*children_[0]->current_tuple(),values[i])!=RC::SUCCESS){
+          return RC::INTERNAL;
+        }
+      }
+      valueListTuple_.set_cells(values);
+    }
+    return RC::SUCCESS;
+  }
 }
 
 RC ProjectPhysicalOperator::close()
@@ -66,27 +80,24 @@ RC ProjectPhysicalOperator::close()
 }
 Tuple *ProjectPhysicalOperator::current_tuple()
 {
-  // if (expressions_.size() == 0 && !children_.empty()) {
-  //   tuple_.set_tuple(children_[0]->current_tuple());
-    
-  //   return &tuple_;
-  // }
-
   if (expressions_.size() == 0 && !children_.empty()) {
-    // select length(name), name from t;
-    std::vector<Value> values;
-    values.resize(all_expressions_.size());
-    Tuple *cur_tuple = children_[0]->current_tuple();
-    for (int i=0; i<all_expressions_.size(); ++i) {
-      Value v;
-      all_expressions_[i]->get_value(*cur_tuple, v);
-      values[i] = v;
+    if(my_expressions_.size()>0){
+      return  &valueListTuple_;
+    } else if (all_expressions_.size() > 0) {
+      std::vector<Value> values;
+      values.resize(all_expressions_.size());
+      Tuple *cur_tuple = children_[0]->current_tuple();
+      for (int i=0; i<all_expressions_.size(); ++i) {
+        Value v;
+        all_expressions_[i]->get_value(*cur_tuple, v);
+        values[i] = v;
+      }
+      valueListTuple_.set_cells(values);
+      return &valueListTuple_;
     }
-
-    generate_tuple_.set_cells(values);
-    return &generate_tuple_;
+    
   }
-  
+
   // 无表查询
   if (expressions_.size() != 0) {
     std::vector<Value> values;
@@ -125,10 +136,12 @@ Tuple *ProjectPhysicalOperator::current_tuple()
       }
       values[i] = v;
     }
-    generate_tuple_.set_cells(values);
-    return &generate_tuple_;
+    valueListTuple_.set_cells(values);
+    return &valueListTuple_;
   }
-  
+
+  tuple_.set_tuple(children_[0]->current_tuple());
+  return &tuple_;
 }
 
 void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta *field_meta, const std::unordered_map<std::string, std::string> &col_alias_map, const std::unordered_map<std::string, std::string> &alias_map)
@@ -139,8 +152,8 @@ void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta
   std::string alias_name = field_meta->name();
 
   if (col_alias_map.find(alias_name) != col_alias_map.end()) {
-      alias_name = col_alias_map.at(alias_name);
-    }
+    alias_name = col_alias_map.at(alias_name);
+  }
 
   if (!table_name.empty()) {
     // 多表查询
@@ -154,6 +167,9 @@ void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta
   }
 
   TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), alias_name.c_str());
-  // TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), field_meta->name());
+  //TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), field_meta->name());
   tuple_.add_cell_spec(spec);
+
 }
+void ProjectPhysicalOperator::add_my_expressions(std::vector<Expression *> &my_expressions)
+{ my_expressions_.insert(my_expressions_.end(),my_expressions.begin(),my_expressions.end());}

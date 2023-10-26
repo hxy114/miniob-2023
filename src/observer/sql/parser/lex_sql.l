@@ -77,8 +77,8 @@ QUOTE            [\'\"]
 {WHITE_SAPCE}                                        // ignore whitespace
 \n                                                   ;
 
-[\-]?{DIGIT}+                           yylval->number=atoi(yytext); RETURN_TOKEN(NUMBER);
-[\-]?{DIGIT}+{DOT}{DIGIT}+              yylval->floats=(float)(atof(yytext)); RETURN_TOKEN(FLOAT);
+{DIGIT}+                           yylval->number=atoi(yytext); RETURN_TOKEN(NUMBER);
+{DIGIT}+{DOT}{DIGIT}+              yylval->floats=(float)(atof(yytext)); RETURN_TOKEN(FLOAT);
 
 ";"                                     RETURN_TOKEN(SEMICOLON);
 {DOT}                                   RETURN_TOKEN(DOT);
@@ -128,7 +128,16 @@ length                                  RETURN_TOKEN(LENGTH_func);
 round                                   RETURN_TOKEN(ROUND_func);
 date_format                             RETURN_TOKEN(FORMAT_func);
 unique                                  RETURN_TOKEN(UNIQUE);
+null                                    RETURN_TOKEN(NULLABLE);
+is                                      RETURN_TOKEN(IS);
+order                                   RETURN_TOKEN(ORDER);
+by                                      RETURN_TOKEN(BY);
+asc                                     RETURN_TOKEN(ASC);
+in                                      RETURN_TOKEN(IN);
+exists                                  RETURN_TOKEN(EXISTS);
+or                                      RETURN_TOKEN(OR);
 as                                      RETURN_TOKEN(AS);
+text                                    RETURN_TOKEN(TEXT_T);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     RETURN_TOKEN(RBRACE);
@@ -149,7 +158,7 @@ as                                      RETURN_TOKEN(AS);
 {QUOTE}[0-9]{4}\-[0-9]{1,2}\-[0-9]{1,2}{QUOTE} yylval->string=strdup(yytext); RETURN_TOKEN(DATE);
 {QUOTE}[%\40A-Za-z0-9_/\.\-,]*{QUOTE}            yylval->string=strdup(yytext); RETURN_TOKEN(PATTERN);
 \"[^"]*\"                               yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
-\'[^']*\'                                yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
+'[^']*\'                                yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
 
 .                                       LOG_DEBUG("Unknown character [%c]",yytext[0]); return yytext[0];
 %%

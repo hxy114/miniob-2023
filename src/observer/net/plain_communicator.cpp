@@ -37,7 +37,7 @@ RC PlainCommunicator::read_event(SessionEvent *&event)
   int data_len = 0;
   int read_len = 0;
 
-  const int max_packet_size = 8192;
+  const int max_packet_size = 81920;
   std::vector<char> buf(max_packet_size);
 
   // 持续接收消息，直到遇到'\0'。将'\0'遇到的后续数据直接丢弃没有处理，因为目前仅支持一收一发的模式
@@ -176,59 +176,76 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
     return write_state(event, need_disconnect);
   }
 
-  rc = sql_result->open();
-  if (OB_FAIL(rc)) {
-    sql_result->close();
-    sql_result->set_return_code(rc);
-    return write_state(event, need_disconnect);
-  }
+  if(sql_result->get_type()==PhysicalOperatorType::ORDERBY){
+    rc = sql_result->open();
+    if (OB_FAIL(rc)) {
+      sql_result->close();
+      sql_result->set_return_code(rc);
+      return write_state(event, need_disconnect);
+    }
 
-  const TupleSchema &schema = sql_result->tuple_schema();
-  const int cell_num = schema.cell_num();
+    const TupleSchema &schema = sql_result->tuple_schema();
+    const int cell_num = schema.cell_num();
 
-  for (int i = 0; i < cell_num; i++) {
-    const TupleCellSpec &spec = schema.cell_at(i);
-    const char *alias = spec.alias();
-    if (nullptr != alias || alias[0] != 0) {
-      if (0 != i) {
-        const char *delim = " | ";
-        rc = writer_->writen(delim, strlen(delim));
+    for (int i = 0; i < cell_num; i++) {
+      const TupleCellSpec &spec = schema.cell_at(i);
+      const char *alias = spec.alias();
+      if (nullptr != alias || alias[0] != 0) {
+        if (0 != i) {
+          const char *delim = " | ";
+          rc = writer_->writen(delim, strlen(delim));
+          if (OB_FAIL(rc)) {
+            LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+            return rc;
+          }
+        }
+
+        int len = strlen(alias);
+        rc = writer_->writen(alias, len);
         if (OB_FAIL(rc)) {
           LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+          sql_result->close();
           return rc;
         }
       }
+    }
 
-      int len = strlen(alias);
-      rc = writer_->writen(alias, len);
+    if (cell_num > 0) {
+      char newline = '\n';
+      rc = writer_->writen(&newline, 1);
       if (OB_FAIL(rc)) {
         LOG_WARN("failed to send data to client. err=%s", strerror(errno));
         sql_result->close();
         return rc;
       }
     }
-  }
 
-  if (cell_num > 0) {
-    char newline = '\n';
-    rc = writer_->writen(&newline, 1);
-    if (OB_FAIL(rc)) {
-      LOG_WARN("failed to send data to client. err=%s", strerror(errno));
-      sql_result->close();
-      return rc;
-    }
-  }
+    rc = RC::SUCCESS;
+    Tuple *tuple = nullptr;
+    while (RC::SUCCESS == (rc = sql_result->next_tuple(tuple))) {
+      assert(tuple != nullptr);
 
-  rc = RC::SUCCESS;
-  Tuple *tuple = nullptr;
-  while (RC::SUCCESS == (rc = sql_result->next_tuple(tuple))) {
-    assert(tuple != nullptr);
+      int cell_num = tuple->cell_num();
+      for (int i = 0; i < cell_num; i++) {
+        if (i != 0) {
+          const char *delim = " | ";
+          rc = writer_->writen(delim, strlen(delim));
+          if (OB_FAIL(rc)) {
+            LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+            sql_result->close();
+            return rc;
+          }
+        }
 
-    int cell_num = tuple->cell_num();
-    for (int i = 0; i < cell_num; i++) {
-      if (i != 0) {
-        const char *delim = " | ";
-        rc = writer_->writen(delim, strlen(delim));
+        Value value;
+        rc = tuple->cell_at(i, value);
+        if (rc != RC::SUCCESS) {
+          sql_result->close();
+          return rc;
+        }
+
+        std::string cell_str = value.to_string();
+        rc = writer_->writen(cell_str.data(), cell_str.size());
         if (OB_FAIL(rc)) {
           LOG_WARN("failed to send data to client. err=%s", strerror(errno));
           sql_result->close();
@@ -236,15 +253,8 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
         }
       }
 
-      Value value;
-      rc = tuple->cell_at(i, value);
-      if (rc != RC::SUCCESS) {
-        sql_result->close();
-        return rc;
-      }
-
-      std::string cell_str = value.to_string();
-      rc = writer_->writen(cell_str.data(), cell_str.size());
+      char newline = '\n';
+      rc = writer_->writen(&newline, 1);
       if (OB_FAIL(rc)) {
         LOG_WARN("failed to send data to client. err=%s", strerror(errno));
         sql_result->close();
@@ -252,45 +262,172 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
       }
     }
 
-    char newline = '\n';
-    rc = writer_->writen(&newline, 1);
-    if (OB_FAIL(rc)) {
-      LOG_WARN("failed to send data to client. err=%s", strerror(errno));
-      sql_result->close();
-      return rc;
+    if (rc == RC::RECORD_EOF) {
+      rc = RC::SUCCESS;
     }
-  }
 
-  if (rc == RC::RECORD_EOF) {
-    rc = RC::SUCCESS;
-  }
+    if (cell_num == 0) {
+      // 除了select之外，其它的消息通常不会通过operator来返回结果，表头和行数据都是空的
+      // 这里针对这种情况做特殊处理，当表头和行数据都是空的时候，就返回处理的结果
+      // 可能是insert/delete等操作，不直接返回给客户端数据，这里把处理结果返回给客户端
+      RC rc_close = sql_result->close();
+      if (rc == RC::SUCCESS) {
+        rc = rc_close;
+      }
+      sql_result->set_return_code(rc);
+      return write_state(event, need_disconnect);
+    } else {
 
-  if (cell_num == 0) {
-    // 除了select之外，其它的消息通常不会通过operator来返回结果，表头和行数据都是空的
-    // 这里针对这种情况做特殊处理，当表头和行数据都是空的时候，就返回处理的结果
-    // 可能是insert/delete等操作，不直接返回给客户端数据，这里把处理结果返回给客户端
+      rc = writer_->writen(send_message_delimiter_.data(), send_message_delimiter_.size());
+      if (OB_FAIL(rc)) {
+        LOG_ERROR("Failed to send data back to client. ret=%s, error=%s", strrc(rc), strerror(errno));
+        sql_result->close();
+        return rc;
+      }
+
+      need_disconnect = false;
+    }
+
     RC rc_close = sql_result->close();
-    if (rc == RC::SUCCESS) {
+    if (OB_SUCC(rc)) {
       rc = rc_close;
     }
-    sql_result->set_return_code(rc);
-    return write_state(event, need_disconnect);
-  } else {
 
-    rc = writer_->writen(send_message_delimiter_.data(), send_message_delimiter_.size());
+    return rc;
+  }else{
+    rc = sql_result->open();
     if (OB_FAIL(rc)) {
-      LOG_ERROR("Failed to send data back to client. ret=%s, error=%s", strrc(rc), strerror(errno));
       sql_result->close();
-      return rc;
+      sql_result->set_return_code(rc);
+      return write_state(event, need_disconnect);
+    }
+    const TupleSchema &schema = sql_result->tuple_schema();
+    const int cell_num = schema.cell_num();
+    string buf;
+    for (int i = 0; i < cell_num; i++) {
+      const TupleCellSpec &spec = schema.cell_at(i);
+      const char *alias = spec.alias();
+      if (nullptr != alias || alias[0] != 0) {
+        if (0 != i) {
+          const char *delim = " | ";
+          //rc = writer_->writen(delim, strlen(delim));
+          buf=buf+" | ";
+          if (OB_FAIL(rc)) {
+            LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+            return rc;
+          }
+        }
+
+        int len = strlen(alias);
+        //rc = writer_->writen(alias, len);
+        buf=buf+alias;
+        if (OB_FAIL(rc)) {
+          LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+          sql_result->close();
+          return rc;
+        }
+      }
     }
 
-    need_disconnect = false;
+    if (cell_num > 0) {
+      char newline = '\n';
+      //rc = writer_->writen(&newline, 1);
+      buf=buf+'\n';
+      if (OB_FAIL(rc)) {
+        LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+        sql_result->close();
+        return rc;
+      }
+    }
+
+    rc = RC::SUCCESS;
+    Tuple *tuple = nullptr;
+
+    while (RC::SUCCESS == (rc = sql_result->next_tuple(tuple))) {
+      assert(tuple != nullptr);
+
+      int cell_num = tuple->cell_num();
+      for (int i = 0; i < cell_num; i++) {
+        if (i != 0) {
+          const char *delim = " | ";
+          //rc = writer_->writen(delim, strlen(delim));
+          buf=buf+" | ";
+          if (OB_FAIL(rc)) {
+            LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+            sql_result->close();
+            return rc;
+          }
+        }
+
+        Value value;
+        rc = tuple->cell_at(i, value);
+        if (rc != RC::SUCCESS) {
+          sql_result->close();
+          return rc;
+        }
+
+        std::string cell_str = value.to_string();
+        //rc = writer_->writen(cell_str.data(), cell_str.size());
+        buf=buf+cell_str;
+        if (OB_FAIL(rc)) {
+          LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+          sql_result->close();
+          return rc;
+        }
+      }
+
+      char newline = '\n';
+      //rc = writer_->writen(&newline, 1);
+      buf=buf+'\n';
+      if (OB_FAIL(rc)) {
+        LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+        sql_result->close();
+        return rc;
+      }
+    }
+
+    if (rc == RC::RECORD_EOF) {
+      rc = RC::SUCCESS;
+    }else if(rc!=RC::SUCCESS&&cell_num!=0){
+      sql_result->close();
+
+      sql_result->set_return_code(RC::INTERNAL);
+      return write_state(event, need_disconnect);
+    }
+
+    if (cell_num == 0) {
+      // 除了select之外，其它的消息通常不会通过operator来返回结果，表头和行数据都是空的
+      // 这里针对这种情况做特殊处理，当表头和行数据都是空的时候，就返回处理的结果
+      // 可能是insert/delete等操作，不直接返回给客户端数据，这里把处理结果返回给客户端
+      RC rc_close = sql_result->close();
+      if (rc == RC::SUCCESS) {
+        rc = rc_close;
+      }
+      sql_result->set_return_code(rc);
+      return write_state(event, need_disconnect);
+    } else {
+      rc= writer_->writen(buf.data(),buf.size());
+      if (OB_FAIL(rc)) {
+        LOG_ERROR("Failed to send data back to client. ret=%s, error=%s", strrc(rc), strerror(errno));
+        sql_result->close();
+        return rc;
+      }
+      rc = writer_->writen(send_message_delimiter_.data(), send_message_delimiter_.size());
+      if (OB_FAIL(rc)) {
+        LOG_ERROR("Failed to send data back to client. ret=%s, error=%s", strrc(rc), strerror(errno));
+        sql_result->close();
+        return rc;
+      }
+
+      need_disconnect = false;
+    }
+
+    RC rc_close = sql_result->close();
+    if (OB_SUCC(rc)) {
+      rc = rc_close;
+    }
+
+    return rc;
   }
 
-  RC rc_close = sql_result->close();
-  if (OB_SUCC(rc)) {
-    rc = rc_close;
-  }
-
-  return rc;
 }

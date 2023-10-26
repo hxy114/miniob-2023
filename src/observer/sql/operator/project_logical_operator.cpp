@@ -15,8 +15,6 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/project_logical_operator.h"
 
 ProjectLogicalOperator::ProjectLogicalOperator(const std::vector<Field> &fields, std::unordered_map<std::string, std::string> &col_alias_map, std::unordered_map<std::string, std::string> &alias_map,
-                        std::vector<std::unique_ptr<Expression>> &all_expressions) :
-         fields_(fields), col_alias_map_(col_alias_map), alias_map_(alias_map)
-{
-    all_expressions_ = std::move(all_expressions);
-}
+            std::vector<Expression*>&my_expression,std::vector<Expression*>&all_expressions)
+    : fields_(fields), col_alias_map_(col_alias_map), alias_map_(alias_map),my_expressions_(my_expression),all_expressions_(all_expressions)
+{}

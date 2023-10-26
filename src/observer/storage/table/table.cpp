@@ -273,7 +273,7 @@ const TableMeta &Table::table_meta() const
   return table_meta_;
 }
 
-RC Table::make_record(int value_num, const Value *values, Record &record)
+RC Table::make_record(int value_num, const Value *values, Record &record,int index)
 {
   // 检查字段类型是否一致
   if (value_num + table_meta_.sys_field_num() != table_meta_.field_num()) {
@@ -284,8 +284,8 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   const int normal_field_start_index = table_meta_.sys_field_num();
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
-    const Value &value = values[i];
-    if (field->type() != value.attr_type()) {
+    const Value &value = values[i+index];
+    if (value.attr_type()!=NULLS&&field->type() != value.attr_type()) {
       LOG_ERROR("Invalid value type. table name =%s, field name=%s, type=%d, but given=%d",
                 table_meta_.name(), field->name(), field->type(), value.attr_type());
       return RC::SCHEMA_FIELD_TYPE_MISMATCH;
@@ -295,18 +295,26 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   // 复制所有字段的值
   int record_size = table_meta_.record_size();
   char *record_data = (char *)malloc(record_size);
-
+  memset(record_data,0,record_size);
+  int null_bitmap_len = align8(value_num) / 8;
+  int null_bitmap_start=table_meta_.field(normal_field_start_index)->offset()-null_bitmap_len;
+  common::Bitmap null_bitmap(record_data+null_bitmap_start,null_bitmap_len);
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
-    const Value &value = values[i];
+    const Value &value = values[i+index];
     size_t copy_len = field->len();
-    if (field->type() == CHARS) {
-      const size_t data_len = value.length();
-      if (copy_len > data_len) {
-        copy_len = data_len + 1;
+    if(value.attr_type()==NULLS){
+    null_bitmap.set_bit(i);
+    }else{
+      if (field->type() == CHARS) {
+        const size_t data_len = value.length();
+        if (copy_len > data_len) {
+          copy_len = data_len + 1;
+        }
       }
+      memcpy(record_data + field->offset(), value.data(), copy_len);
     }
-    memcpy(record_data + field->offset(), value.data(), copy_len);
+
   }
 
   record.set_data_owner(record_data, record_size);
@@ -469,21 +477,43 @@ RC Table::update_record(Record &record, std::vector<const FieldMeta*> field_meta
   char *tmp = (char *)malloc(record.len());
   memcpy(tmp, record.data(), record.len());
   newRecord.set_data_owner(tmp,record.len());
+  int null_bitmap_len = align8(table_meta_.field_num()-table_meta_.sys_field_num()) / 8;
+  int null_bitmap_start=table_meta_.field(table_meta_.sys_field_num())->offset()-null_bitmap_len;
+  common::Bitmap null_bitmap(newRecord.data()+null_bitmap_start,null_bitmap_len);
   for(int i=0;i<field_meta.size();i++){
     size_t copy_len = field_meta[i]->len();
-    if (field_meta[i]->type() == CHARS) {
-      const size_t data_len = strlen((const char *)value[i].data());
-      if (copy_len > data_len) {
-        copy_len = data_len + 1;
+    if(value[i].attr_type()==NULLS){
+      null_bitmap.set_bit(table_meta_.find_field_index_by_name(field_meta[i]->name())-table_meta_.sys_field_num());
+    }else {
+      if (field_meta[i]->type() == CHARS) {
+        const size_t data_len = strlen((const char *)value[i].data());
+        if (copy_len > data_len) {
+          copy_len = data_len + 1;
+        }
       }
+      null_bitmap.clear_bit(table_meta_.find_field_index_by_name(field_meta[i]->name()-table_meta_.sys_field_num()));
+      memcpy(newRecord.data() + field_meta[i]->offset(), value[i].data(), copy_len);
     }
-    memcpy(newRecord.data()+field_meta[i]->offset(), value[i].data(), copy_len);
   }
-
+  const int field_num=table_meta().field_num()-table_meta().sys_field_num();
   std::vector<IndexMeta>indexMeta=get_all_index_meta();
   for(int i=0;i<indexMeta.size();i++){
     if(indexMeta[i].is_unique()){
       Index* index=find_index(indexMeta[i].name());
+      int null_bitmap_len = align8(field_num) / 8;
+      int null_bitmap_start=table_meta().field(table_meta().sys_field_num())->offset()-null_bitmap_len;
+      common::Bitmap null_bitmap(record.data()+null_bitmap_start,null_bitmap_len);
+      bool is_null=false;
+      for(int x=0;x<index->field_meta().size();x++){
+        if(null_bitmap.get_bit(table_meta().find_field_index_by_name(index->field_meta()[x].name())-table_meta().sys_field_num())){
+          is_null=true;
+          break;
+        }
+      }
+
+      if(is_null){
+        continue;
+      }
       auto offset=index->field_meta()[0].offset();
       auto key=newRecord.data()+offset;
       auto scan=index->create_scanner(key,offset,true,key,offset,true);
@@ -541,10 +571,25 @@ RC Table::update_record(Record &record, std::vector<const FieldMeta*> field_meta
   return RC::SUCCESS;
 }
 
-RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
+RC Table::insert_entry_of_indexes( char *record, const RID &rid)
 {
+  const int field_num=table_meta().field_num()-table_meta().sys_field_num();
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
+    int null_bitmap_len = align8(field_num) / 8;
+    int null_bitmap_start=table_meta().field(table_meta().sys_field_num())->offset()-null_bitmap_len;
+    common::Bitmap null_bitmap(record+null_bitmap_start,null_bitmap_len);
+    bool is_null=false;
+    for(int x=0;x<index->field_meta().size();x++){
+      if(null_bitmap.get_bit(table_meta().find_field_index_by_name(index->field_meta()[x].name())-table_meta().sys_field_num())){
+        is_null=true;
+        break;
+      }
+    }
+
+    if(is_null){
+      continue;
+    }
     rc = index->insert_entry(record, &rid);
     if (rc != RC::SUCCESS) {
       break;
@@ -553,10 +598,25 @@ RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
   return rc;
 }
 
-RC Table::delete_entry_of_indexes(const char *record, const RID &rid, bool error_on_not_exists)
+RC Table::delete_entry_of_indexes( char *record, const RID &rid, bool error_on_not_exists)
 {
+  const int field_num=table_meta().field_num()-table_meta().sys_field_num();
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
+    int null_bitmap_len = align8(field_num) / 8;
+    int null_bitmap_start=table_meta().field(table_meta().sys_field_num())->offset()-null_bitmap_len;
+    common::Bitmap null_bitmap(record+null_bitmap_start,null_bitmap_len);
+    bool is_null=false;
+    for(int x=0;x<index->field_meta().size();x++){
+      if(null_bitmap.get_bit(table_meta().find_field_index_by_name(index->field_meta()[x].name())-table_meta().sys_field_num())){
+        is_null=true;
+        break;
+      }
+    }
+
+    if(is_null){
+      continue;
+    }
     rc = index->delete_entry(record, &rid);
     if (rc != RC::SUCCESS) {
       if (rc != RC::RECORD_INVALID_KEY || !error_on_not_exists) {

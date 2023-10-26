@@ -25,10 +25,6 @@ PredicatePhysicalOperator::PredicatePhysicalOperator(std::unique_ptr<Expression>
 
 RC PredicatePhysicalOperator::open(Trx *trx)
 {
-  // if (children_.size() != 1) {
-  //   LOG_WARN("predicate operator must has one child");
-  //   return RC::INTERNAL;
-  // }
 
   if (children_.size() == 1) {
     return children_[0]->open(trx);
@@ -38,7 +34,7 @@ RC PredicatePhysicalOperator::open(Trx *trx)
     LOG_WARN("predicate operator must has one child");
     return RC::INTERNAL;
   }
-  
+
 }
 
 RC PredicatePhysicalOperator::next()

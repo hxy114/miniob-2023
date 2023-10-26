@@ -13,7 +13,7 @@ class UpdatePhysicalOperator : public PhysicalOperator
 {
 public:
   UpdatePhysicalOperator(Table *table, std::vector<const FieldMeta *>field_meta, std::map<int,Value> value,std::map<int,int>select_map)
-      :table_(table), field_meta_(field_meta), value_map_(value),select_map_(select_map),is_muil_row_(false),is_start_(false)
+      :table_(table), field_meta_(field_meta), value_map_(value),select_map_(select_map),is_muil_row_(false),is_fail_(false)
   {}
 
   virtual ~UpdatePhysicalOperator() = default;
@@ -42,5 +42,5 @@ private:
   std::map<int,int>select_map_;
   std::vector<Value>values_;
   bool is_muil_row_;
-  bool is_start_;
+  bool is_fail_;
 };

@@ -21,6 +21,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/field/field.h"
 #include "sql/parser/value.h"
 #include "common/log/log.h"
+#include  "sql/stmt/select_stmt.h"
 
 class Tuple;
 
@@ -43,7 +44,10 @@ enum class ExprType
   COMPARISON,   ///< 需要做比较的表达式
   CONJUNCTION,  ///< 多个表达式使用同一种关系(AND或OR)来联结
   ARITHMETIC,   ///< 算术运算
-  FUNC,         ///< 用于Function计算值
+  SUBSELECT,
+  VALUELIST,
+  STRINGSQL,
+  FUNC
 };
 
 /**
@@ -67,7 +71,7 @@ public:
    * @brief 根据具体的tuple，来计算当前表达式的值。tuple有可能是一个具体某个表的行数据
    */
   virtual RC get_value(const Tuple &tuple, Value &value) const = 0;
-
+  virtual RC get_values(const Tuple &tuple,std::vector<Value>&values)const{ return RC::INTERNAL;}
   /**
    * @brief 在没有实际运行的情况下，也就是无法获取tuple的情况下，尝试获取表达式的值
    * @details 有些表达式的值是固定的，比如ValueExpr，这种情况下可以直接获取值
@@ -116,7 +120,7 @@ public:
 
   ExprType type() const override { return ExprType::FIELD; }
   AttrType value_type() const override { return field_.attr_type(); }
-
+  void setField(Field field){field_=field;}
   Field &field() { return field_; }
 
   const Field &field() const { return field_; }
@@ -158,12 +162,26 @@ public:
   }
 
   Field &field() { return field_; }
+  void setField(Field field){ field_=field; }
 
   const Field &field() const { return field_; }
 
   LengthParam lengthparam() { return lengthparam_; }
+  void set_lengthparam(LengthParam *lengthparam) {
+    lengthparam_ = *lengthparam;
+  }
+
   RoundParam roundparam() { return roundparam_; }
+  void set_roundparam(RoundParam *roundparam) {
+    roundparam_ = *roundparam;
+  }
+
   FormatParam formatparam() { return formatparam_; }
+  void set_formatparam(FormatParam *formatparam) {
+    formatparam_ = *formatparam;
+  }
+
+  void set_func(Func func) { func_ = func; }
 
   const char *table_name() const { return field_.table_name(); }
 
@@ -181,7 +199,27 @@ private:
   FormatParam formatparam_;
 };
 
+/**
+ * @brief 字段表达式
+ * @ingroup Expression
+ */
+class StringSqlExpr : public Expression
+{
+public:
+  StringSqlExpr() = default;
 
+  virtual ~StringSqlExpr() = default;
+  ExprType type() const override { return ExprType::STRINGSQL; }
+  void setType(AttrType attrType){type_=attrType;}
+  AttrType value_type() const override { return type_; }
+
+
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+private:
+  AttrType type_;
+
+};
 /**
  * @brief 常量值表达式
  * @ingroup Expression
@@ -209,7 +247,48 @@ public:
 private:
   Value value_;
 };
+/**
+ * @brief 字段表达式
+ * @ingroup Expression
+ */
+class SubSelectExpr : public Expression
+{
+public:
+  SubSelectExpr() = default;
+  SubSelectExpr(SelectStmt sub_select) : sub_select_(sub_select)
+  {}
+  virtual ~SubSelectExpr() = default;
 
+  ExprType type() const override { return ExprType::SUBSELECT; }
+  AttrType value_type() const override { return sub_select_.query_fields()[0].attr_type(); }
+
+
+  RC get_values(const Tuple &tuple, std::vector<Value> &value)const override ;
+
+  RC get_value(const Tuple &tuple, Value &value) const{return RC::INTERNAL;};
+
+private:
+  SelectStmt sub_select_;
+};
+class ValueListExpr : public Expression
+{
+public:
+  ValueListExpr() = default;
+  ValueListExpr(std::vector<Value> value_list) : value_list_(value_list)
+  {}
+  virtual ~ValueListExpr() = default;
+
+  ExprType type() const override { return ExprType::VALUELIST; }
+  AttrType value_type() const override { return value_list_[0].attr_type(); }
+
+
+  RC get_values(const Tuple &tuple, std::vector<Value> &value)const override ;
+
+  RC get_value(const Tuple &tuple, Value &value) const{return RC::INTERNAL;};
+
+private:
+  std::vector<Value> value_list_;
+};
 /**
  * @brief 类型转换表达式
  * @ingroup Expression

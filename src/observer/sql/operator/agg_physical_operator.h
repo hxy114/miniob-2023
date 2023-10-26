@@ -9,7 +9,7 @@
 class AggPhysicalOperator : public PhysicalOperator
 {
 public:
-  AggPhysicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields);
+  AggPhysicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields,std::vector<Expression*>&my_expressions);
 
   virtual ~AggPhysicalOperator() = default;
 
@@ -24,6 +24,9 @@ public:
 
   int cell_num() const
   {
+    if(!my_expressions_.empty()){
+      return my_expressions_.size();
+    }
     return tuple_.cell_num();
   }
 
@@ -33,6 +36,9 @@ private:
   ValueListTuple tuple_;
   std::vector<RelAttrSqlNode> attributes_;
   std::vector<Field>fields_;
-  int count_;
+  std::vector<int> count_;
   bool finish_;
+
+  std::vector<Expression*>my_expressions_;
+  ValueListTuple expression_tuple_;
 };

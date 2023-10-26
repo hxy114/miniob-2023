@@ -68,7 +68,7 @@ public:
    * @param values    每个字段的值
    * @param record    生成的记录数据
    */
-  RC make_record(int value_num, const Value *values, Record &record);
+  RC make_record(int value_num, const Value *values, Record &record,int index=0);
 
   /**
    * @brief 在当前的表中插入一条记录
@@ -102,8 +102,8 @@ public:
   RC sync();
 
 private:
-  RC insert_entry_of_indexes(const char *record, const RID &rid);
-  RC delete_entry_of_indexes(const char *record, const RID &rid, bool error_on_not_exists);
+  RC insert_entry_of_indexes( char *record, const RID &rid);
+  RC delete_entry_of_indexes( char *record, const RID &rid, bool error_on_not_exists);
 
 private:
   RC init_record_handler(const char *base_dir);

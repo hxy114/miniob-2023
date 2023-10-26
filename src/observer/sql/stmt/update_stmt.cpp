@@ -80,6 +80,12 @@ RC UpdateStmt::create(Db *db,  UpdateSqlNode &update, Stmt *&stmt)
             auto s= common::float2string(value.get_float());
             value.set_type(CHARS);
             value.set_string(s.c_str());
+          }else if(value_type==NULLS){
+            if(!field_meta->is_null()){
+              LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+            }
           }else{
             LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
               table_name, field_meta->name(), field_type, value_type);
@@ -97,6 +103,12 @@ RC UpdateStmt::create(Db *db,  UpdateSqlNode &update, Stmt *&stmt)
             value.set_type(INTS);
             value.set_int(integer);
 
+          }else if(value_type==NULLS){
+            if(!field_meta->is_null()){
+              LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+            }
           }else{
             LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
               table_name, field_meta->name(), field_type, value_type);
@@ -111,10 +123,38 @@ RC UpdateStmt::create(Db *db,  UpdateSqlNode &update, Stmt *&stmt)
             auto d= common::string2float(value.get_string());
             value.set_type(FLOATS);
             value.set_float(d);
+          }else if(value_type==NULLS){
+            if(!field_meta->is_null()){
+              LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+            }
           }else{
             LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
               table_name, field_meta->name(), field_type, value_type);
             return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+          }
+        }else if(field_type==DATES){
+          if(value_type==NULLS){
+            if(!field_meta->is_null()){
+              LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+            }
+          }else{
+            LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+              table_name, field_meta->name(), field_type, value_type);
+            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+          }
+        }else if(field_type==TEXTS){
+          if(value_type==CHARS){
+            if(value.length()>65535){
+              return RC::INVALID_ARGUMENT;
+            }
+            char *text=(char *)malloc(value.length()+1);
+            memcpy(text,value.get_string().c_str(),value.length());
+            text[value.length()]='\0';
+            value.set_text(text);
           }
         }else{
           LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
@@ -147,9 +187,11 @@ RC UpdateStmt::create(Db *db,  UpdateSqlNode &update, Stmt *&stmt)
 
   RC rc = FilterStmt::create(db,
       table,
+      std::string(),
       &table_map,
       update.conditions.data(),
       static_cast<int>(update.conditions.size()),
+      std::unordered_map<std::string, Table *>(),
       filter_stmt);
   if (rc != RC::SUCCESS) {
     LOG_WARN("cannot construct filter stmt");

@@ -32,16 +32,13 @@ public:
   {
     expressions_ = std::move(expressions);
   }
-  // void add_attributes(std::vector<RelAttrSqlNode> &attributes)
-  // {
-  //   attributes_ = attributes;
-  // }
-  void add_all_expressions(std::vector<std::unique_ptr<Expression>> &all_expressions)
-  {
-    all_expressions_ = std::move(all_expressions);
-  } 
-
   void add_projection(const Table *table, const FieldMeta *field, const std::unordered_map<std::string, std::string> &col_alias_map, const std::unordered_map<std::string, std::string> &alias_map);
+  void add_my_expressions(std::vector<Expression*>&my_expressions);
+
+  void add_all_expressions(std::vector<Expression*> &all_expressions)
+  {
+    all_expressions_ = all_expressions;
+  } 
 
   PhysicalOperatorType type() const override
   {
@@ -54,6 +51,9 @@ public:
 
   int cell_num() const
   {
+    if(my_expressions_.size()>0){
+      return my_expressions_.size();
+    }
     return tuple_.cell_num();
   }
 
@@ -61,8 +61,11 @@ public:
 
 private:
   ProjectTuple tuple_;
+  std::vector<Expression*>my_expressions_;
+  ValueListTuple valueListTuple_;
   std::vector<std::unique_ptr<Expression>> expressions_; //用于无表查询Function
   bool withoutTable_EOF_flag = false;
-  ValueListTuple generate_tuple_;
-  std::vector<std::unique_ptr<Expression>> all_expressions_; //所有select attr的表达式
+  // ValueListTuple generate_tuple_;
+  std::vector<Expression*> all_expressions_; // 用于无表达式无agg情况下的简单查询(Function)
+
 };

@@ -25,7 +25,7 @@ class ConditionFilter;
 class RecordPageHandler;
 class Trx;
 class Table;
-
+int align8(int size);
 /**
  * @brief 这里负责管理在一个文件上表记录(行)的组织/管理
  * @defgroup RecordManager
