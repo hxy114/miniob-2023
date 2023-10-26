@@ -177,9 +177,9 @@ typedef void* yyscan_t;
  * Moreover, YY_BUF_SIZE is 2*YY_READ_BUF_SIZE in the general case.
  * Ditto for the __ia64__ case accordingly.
  */
-#define YY_BUF_SIZE 32768
+#define YY_BUF_SIZE 3276800
 #else
-#define YY_BUF_SIZE 16384
+#define YY_BUF_SIZE 1638400
 #endif /* __ia64__ */
 #endif
 
@@ -358,9 +358,9 @@ static int yy_flex_strlen ( const char * , yyscan_t yyscanner);
 #ifndef YY_READ_BUF_SIZE
 #ifdef __ia64__
 /* On IA-64, the buffer size is 16k, not 8k */
-#define YY_READ_BUF_SIZE 16384
+#define YY_READ_BUF_SIZE 1638400
 #else
-#define YY_READ_BUF_SIZE 8192
+#define YY_READ_BUF_SIZE 819200
 #endif /* __ia64__ */
 #endif
 
@@ -541,7 +541,7 @@ extern int yylex \
 #undef yyTABLES_NAME
 #endif
 
-#line 160 "lex_sql.l"
+#line 161 "lex_sql.l"
 
 
 #line 548 "lex_sql.h"

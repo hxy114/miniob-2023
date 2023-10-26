@@ -117,6 +117,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
          EXISTS
          OR
          AS
+         TEXT_T
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -414,6 +415,13 @@ attr_def:
               $$->length = 10;
               $$->is_null=$3;
               free($1);
+    }else if((AttrType)$2==TEXTS){
+    $$ = new AttrInfoSqlNode;
+              $$->type = (AttrType)$2;
+              $$->name = $1;
+              $$->length = 8;
+              $$->is_null=$3;
+              free($1);
     }else{
     $$ = new AttrInfoSqlNode;
           $$->type = (AttrType)$2;
@@ -443,6 +451,7 @@ type:
     | STRING_T { $$=CHARS; }
     | FLOAT_T  { $$=FLOATS; }
     | DATE_T  {$$=DATES;}
+    | TEXT_T {$$=TEXTS;}
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
     INSERT INTO ID VALUES insert_value insert_values
