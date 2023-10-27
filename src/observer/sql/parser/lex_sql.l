@@ -124,6 +124,9 @@ min                                     RETURN_TOKEN(MIN_agg);
 avg                                     RETURN_TOKEN(AVG_agg);
 count                                   RETURN_TOKEN(COUNT_agg);
 sum                                     RETURN_TOKEN(SUM_agg);
+length                                  RETURN_TOKEN(LENGTH_func);
+round                                   RETURN_TOKEN(ROUND_func);
+date_format                             RETURN_TOKEN(FORMAT_func);
 unique                                  RETURN_TOKEN(UNIQUE);
 null                                    RETURN_TOKEN(NULLABLE);
 is                                      RETURN_TOKEN(IS);
@@ -153,7 +156,7 @@ text                                    RETURN_TOKEN(TEXT_T);
 "*" |
 "/"                                     { return yytext[0]; }
 {QUOTE}[0-9]{4}\-[0-9]{1,2}\-[0-9]{1,2}{QUOTE} yylval->string=strdup(yytext); RETURN_TOKEN(DATE);
-{QUOTE}[%\40A-Za-z0-9_/\.\-]*{QUOTE}            yylval->string=strdup(yytext); RETURN_TOKEN(PATTERN);
+{QUOTE}[%\40A-Za-z0-9_/\.\-,]*{QUOTE}            yylval->string=strdup(yytext); RETURN_TOKEN(PATTERN);
 \"[^"]*\"                               yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
 '[^']*\'                                yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
 

@@ -44,4 +44,5 @@ public:
 
 private:
   std::unique_ptr<Expression> expression_;
+  bool withoutTable_EOF_flag = false;
 };

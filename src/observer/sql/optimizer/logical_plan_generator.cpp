@@ -141,11 +141,41 @@ RC LogicalPlanGenerator::create_plan(
     std::unordered_map<std::string, std::string> col_alias_map = select_stmt->col_alias_map();
     unique_ptr<LogicalOperator> order_oper(nullptr);
     if(select_stmt->order_by_fields().size()>0){
-      unique_ptr<LogicalOperator> order_oper_tmp(new OrderLogicalOperator(select_stmt->order_by_fields(),select_stmt->order_by_sequences(),all_fields));
-      order_oper= std::move(order_oper_tmp);
+      unique_ptr<LogicalOperator> order_oper_tmp = unique_ptr<LogicalOperator>(static_cast<LogicalOperator *>(new OrderLogicalOperator(select_stmt->order_by_fields(),select_stmt->order_by_sequences(),all_fields)));
+      // unique_ptr<LogicalOperator> order_oper_tmp(new OrderLogicalOperator(select_stmt->order_by_fields(),select_stmt->order_by_sequences(),all_fields));
+      order_oper = std::move(order_oper_tmp);
     }
 
-    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields, col_alias_map, alias_map,select_stmt->expression()));
+    unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields, col_alias_map, alias_map,select_stmt->expression(), select_stmt->all_expressions()));
+    bool without_table_query = table_oper ? false : true;  //无表查询判断
+    // 无表查询
+    if (without_table_query) {
+      for (auto &attribute:all_attributes) {
+        if (attribute.func == NO_FUNC) {
+          return RC::SQL_SYNTAX;
+        }
+        Expression* expr;
+        switch (attribute.func)
+        {
+        case LENGTH_FUNC:
+          expr = new FuncExpr(Field(), attribute.func, attribute.lengthparam);
+          break;
+        case ROUND_FUNC:
+          expr = new FuncExpr(Field(), attribute.func, attribute.roundparam);
+          break;
+        case FORMAT_FUNC:
+          expr = new FuncExpr(Field(), attribute.func, attribute.formatparam);
+          break;
+        default:
+          return RC::UNIMPLENMENT;
+        }
+
+        unique_ptr<Expression> cur(expr);
+        
+        project_oper->add_expression(std::move(cur));
+      }
+    }
+
     if(order_oper){
       if (predicate_oper) {
         if (table_oper) {
@@ -173,8 +203,6 @@ RC LogicalPlanGenerator::create_plan(
       logical_operator.swap(project_oper);
     }
 
-
-
     return RC::SUCCESS;
 
   }
@@ -198,11 +226,28 @@ RC LogicalPlanGenerator::create_plan(
       const FilterObj &filter_obj_right = filter_unit->right();
       unique_ptr<Expression> left,right;
       if(filter_obj_left.filter_type_==VALUE_TYPE){
-       left= std::unique_ptr<Expression >(static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
+       left= std::unique_ptr<Expression>(static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
       }else if(filter_obj_left.filter_type_==ATTR_TYPE){
-       left=std::unique_ptr<Expression >(static_cast<Expression *>(new FieldExpr(filter_obj_left.field)));
+        if (filter_obj_left.func_ != NO_FUNC) {
+          switch (filter_obj_left.func_)
+          {
+          case LENGTH_FUNC:
+            left = std::unique_ptr<Expression>(static_cast<Expression *>(new FuncExpr(filter_obj_left.field,LENGTH_FUNC,filter_obj_left.lengthparam_)));
+            break;
+          case ROUND_FUNC:
+            left = std::unique_ptr<Expression>(static_cast<Expression *>(new FuncExpr(filter_obj_left.field,ROUND_FUNC,filter_obj_left.roundparam_)));
+            break;
+          case FORMAT_FUNC:
+            left = std::unique_ptr<Expression>(static_cast<Expression *>(new FuncExpr(filter_obj_left.field,FORMAT_FUNC,filter_obj_left.formatparam_)));
+            break;
+          default:
+            return RC::UNIMPLENMENT;
+          }          
+        } else {
+          left=std::unique_ptr<Expression>(static_cast<Expression *>(new FieldExpr(filter_obj_left.field)));
+        }
       }else if(filter_obj_left.filter_type_==SUB_SELECT_TYPE){
-       left=std::unique_ptr<Expression >(static_cast<Expression *>(new SubSelectExpr(filter_obj_left.select)));
+       left=std::unique_ptr<Expression>(static_cast<Expression *>(new SubSelectExpr(filter_obj_left.select)));
       }else if(filter_obj_left.filter_type_==VALUE_LIST_TYPE){
        left=std::unique_ptr<Expression>(static_cast<Expression*>(new ValueListExpr(filter_obj_left.value_list)));
       }else if(filter_obj_left.filter_type_==EXPR_TYPE){
@@ -210,11 +255,28 @@ RC LogicalPlanGenerator::create_plan(
       }
 
       if(filter_obj_right.filter_type_==VALUE_TYPE){
-       right=std::unique_ptr<Expression >(static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
+       right=std::unique_ptr<Expression>(static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
       }else if(filter_obj_right.filter_type_==ATTR_TYPE){
-       right=std::unique_ptr<Expression >(static_cast<Expression *>(new FieldExpr(filter_obj_right.field)));
+        if (filter_obj_right.func_ != NO_FUNC) {
+          switch (filter_obj_right.func_)
+          {
+          case LENGTH_FUNC:
+            right = std::unique_ptr<Expression>(static_cast<Expression *>(new FuncExpr(filter_obj_right.field,LENGTH_FUNC,filter_obj_right.lengthparam_)));
+            break;
+          case ROUND_FUNC:
+            right = std::unique_ptr<Expression>(static_cast<Expression *>(new FuncExpr(filter_obj_right.field,ROUND_FUNC,filter_obj_right.roundparam_)));
+            break;
+          case FORMAT_FUNC:
+            right = std::unique_ptr<Expression>(static_cast<Expression *>(new FuncExpr(filter_obj_right.field,FORMAT_FUNC,filter_obj_right.formatparam_)));
+            break;
+          default:
+            return RC::UNIMPLENMENT;
+          }          
+        } else {
+          right=std::unique_ptr<Expression>(static_cast<Expression *>(new FieldExpr(filter_obj_right.field)));
+        } 
       }else if(filter_obj_right.filter_type_==SUB_SELECT_TYPE){
-       right=std::unique_ptr<Expression >(static_cast<Expression *>(new SubSelectExpr(filter_obj_right.select)));
+       right=std::unique_ptr<Expression>(static_cast<Expression *>(new SubSelectExpr(filter_obj_right.select)));
       }else if(filter_obj_right.filter_type_==VALUE_LIST_TYPE){
        right=std::unique_ptr<Expression>(static_cast<Expression*>(new ValueListExpr(filter_obj_right.value_list)));
       }else if(filter_obj_right.filter_type_==EXPR_TYPE){

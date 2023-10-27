@@ -28,12 +28,17 @@ public:
 
   virtual ~ProjectPhysicalOperator() = default;
 
-  void add_expressions(std::vector<std::unique_ptr<Expression>> &&expressions)
+  void add_expressions(std::vector<std::unique_ptr<Expression>> &expressions)
   {
-    
+    expressions_ = std::move(expressions);
   }
   void add_projection(const Table *table, const FieldMeta *field, const std::unordered_map<std::string, std::string> &col_alias_map, const std::unordered_map<std::string, std::string> &alias_map);
   void add_my_expressions(std::vector<Expression*>&my_expressions);
+
+  void add_all_expressions(std::vector<Expression*> &all_expressions)
+  {
+    all_expressions_ = all_expressions;
+  } 
 
   PhysicalOperatorType type() const override
   {
@@ -58,4 +63,9 @@ private:
   ProjectTuple tuple_;
   std::vector<Expression*>my_expressions_;
   ValueListTuple valueListTuple_;
+  std::vector<std::unique_ptr<Expression>> expressions_; //用于无表查询Function
+  bool withoutTable_EOF_flag = false;
+  // ValueListTuple generate_tuple_;
+  std::vector<Expression*> all_expressions_; // 用于无表达式无agg情况下的简单查询(Function)
+
 };

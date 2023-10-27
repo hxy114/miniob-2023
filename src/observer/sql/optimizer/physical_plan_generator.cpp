@@ -168,7 +168,17 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
 RC PhysicalPlanGenerator::create_plan(PredicateLogicalOperator &pred_oper, unique_ptr<PhysicalOperator> &oper)
 {
   vector<unique_ptr<LogicalOperator>> &children_opers = pred_oper.children();
-  ASSERT(children_opers.size() == 1, "predicate logical operator's sub oper number should be 1");
+  // ASSERT(children_opers.size() == 1, "predicate logical operator's sub oper number should be 1");
+  vector<unique_ptr<Expression>> &expressions = pred_oper.expressions();
+  ASSERT(expressions.size() == 1, "predicate logical operator's children should be 1");
+
+  unique_ptr<Expression> expression = std::move(expressions.front());
+  oper = unique_ptr<PhysicalOperator>(new PredicatePhysicalOperator(std::move(expression)));
+  
+  if (children_opers.size() == 0) {
+    return RC::SUCCESS;
+  }
+
 
   LogicalOperator &child_oper = *children_opers.front();
 
@@ -179,11 +189,6 @@ RC PhysicalPlanGenerator::create_plan(PredicateLogicalOperator &pred_oper, uniqu
     return rc;
   }
 
-  vector<unique_ptr<Expression>> &expressions = pred_oper.expressions();
-  ASSERT(expressions.size() == 1, "predicate logical operator's children should be 1");
-
-  unique_ptr<Expression> expression = std::move(expressions.front());
-  oper = unique_ptr<PhysicalOperator>(new PredicatePhysicalOperator(std::move(expression)));
   oper->add_child(std::move(child_phy_oper));
   return rc;
 }
@@ -218,6 +223,9 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
   if (child_phy_oper) {
     project_operator->add_child(std::move(child_phy_oper));
   }
+
+  project_operator->add_expressions(project_oper.expressions());
+  project_operator->add_all_expressions(project_oper.all_expressions());
 
   oper = unique_ptr<PhysicalOperator>(project_operator);
 
