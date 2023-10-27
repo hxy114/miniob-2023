@@ -123,12 +123,17 @@ RC LogicalPlanGenerator::create_plan(
   }
 
   if(is_agg){
+
     unique_ptr<LogicalOperator> having_oper;
-    RC rc = create_plan(select_stmt->having_filter_stmt(), having_oper);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
-      return rc;
+    if(select_stmt->having_filter_stmt()) {
+      RC rc = create_plan(select_stmt->having_filter_stmt(), having_oper);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+        return rc;
+      }
     }
+
+
     unique_ptr<LogicalOperator> agg_oper;
     if(having_oper){
       unique_ptr<LogicalOperator> agg_oper_tmp(new AggLogicalOperator(all_attributes,all_fields,select_stmt->expression(),select_stmt->group_by_fields(),having_oper->expressions()[0].release()));

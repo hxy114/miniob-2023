@@ -100,7 +100,7 @@ public:
   std::vector<Field>&group_by_fields(){
     return group_by_fields_;
   }
-  FilterStmt *having_filter_stmt(){
+  FilterStmt *having_filter_stmt()const{
     return having_filter_stmt_;
   }
 
