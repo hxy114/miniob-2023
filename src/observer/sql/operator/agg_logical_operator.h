@@ -15,7 +15,7 @@
 class AggLogicalOperator : public LogicalOperator
 {
 public:
-  AggLogicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields,std::vector<Expression*>&my_expression);
+  AggLogicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields,std::vector<Expression*>&my_expression, std::vector<Field>& group_fields,Expression * having_expression);
   virtual ~AggLogicalOperator() = default;
 
   LogicalOperatorType type() const override
@@ -42,6 +42,12 @@ public:
   std::vector<Expression*>&my_expressions(){
     return my_expressions_;
   }
+  std::vector<Field>&group_fields(){
+    return group_fields_;
+  }
+   Expression * having_expression(){
+    return having_expression_;
+  }
 
 private:
   //! 投影映射的字段名称
@@ -52,4 +58,7 @@ private:
   std::vector<Field>fields_;
 
   std::vector<Expression*>my_expressions_;
+
+  std::vector<Field>group_fields_;
+  Expression* having_expression_;
 };

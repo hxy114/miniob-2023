@@ -224,8 +224,10 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::string defa
           default:
             return RC::UNIMPLENMENT;
           }
-        } else {
+        } else if(condition.left_attr.agg==NO_AGG){
           filter_obj.init_attr(Field(table, field));
+        }else{
+          filter_obj.init_agg(Field(table,field),condition.left_attr);
         }
 
       }

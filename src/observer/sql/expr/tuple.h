@@ -425,6 +425,9 @@ public:
   {
     return RC::INTERNAL;
   }
+  std::vector<Value>&values(){
+    return cells_;
+  }
 
 private:
   std::vector<Value> cells_;

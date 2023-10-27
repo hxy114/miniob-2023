@@ -94,6 +94,8 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
             }else if(select_stmt->attributes()[i].agg==SUM_AGG){
               string name="sum("+select_stmt->attributes()[i].attribute_name+")";
               schema.append_cell(name.c_str());
+            }else if(select_stmt->attributes()[i].agg==NO_AGG){
+              schema.append_cell(select_stmt->attributes()[i].attribute_name.c_str());
             }
 
           }

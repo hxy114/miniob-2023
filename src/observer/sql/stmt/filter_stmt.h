@@ -31,6 +31,7 @@ struct FilterObj
   Value value;
   SelectStmt select;
   std::vector<Value>value_list;
+  RelAttrSqlNode agg;
   Expression *expression;
   Func func_;
   LengthParam lengthparam_;
@@ -85,6 +86,12 @@ struct FilterObj
     this->field = field;
     this->func_ = FORMAT_FUNC;
     this->formatparam_ = formatparam;
+  }
+  void init_agg( const Field &field,const RelAttrSqlNode relAttrSqlNode){
+    filter_type_=AGG_TYPE;
+    this->func_ = NO_FUNC;
+    this->field=field;
+    this->agg=relAttrSqlNode;
   }
 };
 

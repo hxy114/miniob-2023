@@ -371,7 +371,7 @@ RC PhysicalPlanGenerator::create_plan(AggLogicalOperator &agg_oper, unique_ptr<P
     }
   }
 
-  AggPhysicalOperator *agg_operator = new AggPhysicalOperator(agg_oper.attributes(),agg_oper.fields(),agg_oper.my_expressions());
+  AggPhysicalOperator *agg_operator = new AggPhysicalOperator(agg_oper.attributes(),agg_oper.fields(),agg_oper.my_expressions(),agg_oper.group_fields(),agg_oper.having_expression());
   agg_operator->add_child(std::move(child_phy_oper));
 
   oper = unique_ptr<PhysicalOperator>(agg_operator);
