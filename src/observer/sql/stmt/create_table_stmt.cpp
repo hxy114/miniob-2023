@@ -46,9 +46,12 @@ RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt 
           std::string field_name = tmp->field_name();
           if (!is_one_table && tmp->table_name()) attr_info.name = tmp->table_name() + '.';
           attr_info.name += field_name;
-          if (tmp_stmt->col_alias_map().find(field_name) != tmp_stmt->col_alias_map().end()) {
-            attr_info.name = tmp_stmt->col_alias_map()[field_name];
+          if (!tmp->alias_name().empty()) {
+            attr_info.name = tmp->alias_name();
           }
+          // if (tmp_stmt->col_alias_map().find(field_name) != tmp_stmt->col_alias_map().end()) {
+          //   attr_info.name = tmp_stmt->col_alias_map()[field_name];
+          // }
           attr_info.length = tmp->field().meta()->len();
           attr_info.is_null = tmp->field().meta()->is_null();
         } break;
@@ -64,7 +67,10 @@ RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt 
         {
           ArithmeticExpr *tmp = static_cast<ArithmeticExpr *>(expr);
           attr_info.type = tmp->value_type();
-          attr_info.name = tmp->name();  // 包含as，可能要改
+          attr_info.name = tmp->name();
+          if (tmp_stmt->expr_alias_map().contains(tmp->name())) {
+            attr_info.name = tmp_stmt->expr_alias_map()[tmp->name()];
+          }
           attr_info.length = 4;  // 表达式只会返回ints/floats
           attr_info.is_null = true;
         } break;

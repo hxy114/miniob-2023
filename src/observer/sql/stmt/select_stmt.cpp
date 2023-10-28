@@ -322,6 +322,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
       select_stmt->is_expression_select_attr_=true;
       auto attributes_expression(select_sql.attributes_expression);
       select_stmt->attributes_expression_.swap(attributes_expression);
+      select_stmt->expr_alias_map_ = select_sql.expr_alias_map;
       select_stmt->is_group_=false;
       //auto stringsqlExprs(select_sql.stringsqlExprs);
       //select_stmt->stringsqlExprs.swap(stringsqlExprs);
@@ -490,6 +491,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
       select_stmt->is_expression_select_attr_=true;
       auto attributes_expression(select_sql.attributes_expression);
       select_stmt->attributes_expression_.swap(attributes_expression);
+      select_stmt->expr_alias_map_ = select_sql.expr_alias_map;
       //auto fieldExprs(select_sql.fieldExprs);
       //select_stmt->fieldExprs.swap(fieldExprs);
       select_stmt->is_group_=false;

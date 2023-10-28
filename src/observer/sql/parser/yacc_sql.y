@@ -690,6 +690,7 @@ select_stmt:        /*  select 语句的语法解析树*/
              $$->selection.stringsqlExprs.swap($2->stringsqlExprs);
              $$->selection.fieldExprs.swap($2->fieldExprs);
              $$->selection.is_expression_select_attr=$2->is_expression;
+             $$->selection.expr_alias_map.swap($2->expr_alias_map);
              std::reverse($$->selection.attributes_expression.begin(), $$->selection.attributes_expression.end());
              delete $2;
            }
@@ -873,10 +874,11 @@ expression_list:
       if($1->is_expression){
       $$->is_expression=true;
       }
+      $$->expr_alias_map.insert($1->expr_alias_map.begin(), $1->expr_alias_map.end());
     }
     ;
 expression:
-    expression '+' expression {
+    expression '+' expression as {
     $$=new ExpressionSqlNode;
       $$->expression.push_back(create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1->expression[0], $3->expression[0], sql_string, &@$));
       $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
@@ -886,8 +888,19 @@ expression:
       $$->fieldExprs.insert($$->fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
             $$->fieldExprs.insert($$->fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
             $$->is_expression=true;
+      if ($4 != nullptr) {
+        $$->expr_alias_map[token_name(sql_string, &@$)] = $4;
+      }
+      if (!$1->relAttrSqlNodes[0].alias_name.empty()) {
+        $$->expr_alias_map[token_name(sql_string, &@$)] = $1->relAttrSqlNodes[0].alias_name;
+        $1->relAttrSqlNodes[0].alias_name = "";
+      }
+      if (!$3->relAttrSqlNodes[0].alias_name.empty()) {
+        $$->expr_alias_map[token_name(sql_string, &@$)] = $3->relAttrSqlNodes[0].alias_name;
+        $3->relAttrSqlNodes[0].alias_name = "";
+      }
     }
-    | expression '-' expression {
+    | expression '-' expression as {
     $$=new ExpressionSqlNode;
       $$->expression.push_back( create_arithmetic_expression(ArithmeticExpr::Type::SUB, $1->expression[0], $3->expression[0], sql_string, &@$));
       $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
@@ -897,8 +910,19 @@ expression:
       $$->fieldExprs.insert($$->fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
                   $$->fieldExprs.insert($$->fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
                   $$->is_expression=true;
+      if ($4 != nullptr) {
+        $$->expr_alias_map[token_name(sql_string, &@$)] = $4;
+      } 
+      if (!$1->relAttrSqlNodes[0].alias_name.empty()) {
+        $$->expr_alias_map[token_name(sql_string, &@$)] = $1->relAttrSqlNodes[0].alias_name;
+        $1->relAttrSqlNodes[0].alias_name = "";
+      }
+      if (!$3->relAttrSqlNodes[0].alias_name.empty()) {
+        $$->expr_alias_map[token_name(sql_string, &@$)] = $3->relAttrSqlNodes[0].alias_name;
+        $3->relAttrSqlNodes[0].alias_name = "";
+      }
     }
-    | expression '*' expression {
+    | expression '*' expression as {
     $$=new ExpressionSqlNode;
       $$->expression.push_back( create_arithmetic_expression(ArithmeticExpr::Type::MUL, $1->expression[0], $3->expression[0], sql_string, &@$));
       $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
@@ -908,8 +932,19 @@ expression:
       $$->fieldExprs.insert($$->fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
                   $$->fieldExprs.insert($$->fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
                   $$->is_expression=true;
+      if ($4 != nullptr) {
+        $$->expr_alias_map[token_name(sql_string, &@$)] = $4;
+      }
+      if (!$1->relAttrSqlNodes[0].alias_name.empty()) {
+        $$->expr_alias_map[token_name(sql_string, &@$)] = $1->relAttrSqlNodes[0].alias_name;
+        $1->relAttrSqlNodes[0].alias_name = "";
+      }
+      if (!$3->relAttrSqlNodes[0].alias_name.empty()) {
+        $$->expr_alias_map[token_name(sql_string, &@$)] = $3->relAttrSqlNodes[0].alias_name;
+        $3->relAttrSqlNodes[0].alias_name = "";
+      } 
     }
-    | expression '/' expression {
+    | expression '/' expression as {
     $$=new ExpressionSqlNode;
       $$->expression.push_back(create_arithmetic_expression(ArithmeticExpr::Type::DIV, $1->expression[0], $3->expression[0], sql_string, &@$));
       $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$1->relAttrSqlNodes.begin(),$1->relAttrSqlNodes.end());
@@ -919,13 +954,24 @@ expression:
       $$->fieldExprs.insert($$->fieldExprs.end(),$1->fieldExprs.begin(),$1->fieldExprs.end());
                   $$->fieldExprs.insert($$->fieldExprs.end(),$3->fieldExprs.begin(),$3->fieldExprs.end());
                   $$->is_expression=true;
+      if ($4 != nullptr) {
+        $$->expr_alias_map[token_name(sql_string, &@$)] = $4;
+      } 
+      if (!$1->relAttrSqlNodes[0].alias_name.empty()) {
+        $$->expr_alias_map[token_name(sql_string, &@$)] = $1->relAttrSqlNodes[0].alias_name;
+        $1->relAttrSqlNodes[0].alias_name = "";
+      }
+      if (!$3->relAttrSqlNodes[0].alias_name.empty()) {
+        $$->expr_alias_map[token_name(sql_string, &@$)] = $3->relAttrSqlNodes[0].alias_name;
+        $3->relAttrSqlNodes[0].alias_name = "";
+      }
     }
     | LBRACE expression RBRACE {
       $$ = $2;
       $$->expression[0]->set_name(token_name(sql_string, &@$));
       $$->is_expression=true;
     }
-    | '-' expression %prec UMINUS {
+    | '-' expression %prec UMINUS as {
     $$=new ExpressionSqlNode;
     $$->expression.push_back( create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, $2->expression[0], nullptr, sql_string, &@$));
     $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$2->relAttrSqlNodes.begin(),$2->relAttrSqlNodes.end());
@@ -955,6 +1001,11 @@ expression:
     $$->relAttrSqlNodes.push_back(*relAttrSqlNode);
     auto fieldExpr=new FieldExpr;
     fieldExpr->set_name(token_name(sql_string, &@$));
+    if($2!=nullptr){
+      std::string str = $2;
+      fieldExpr->set_alias_name(str);
+    }
+    
     $$->expression.push_back(fieldExpr);
     $$->fieldExprs.push_back(fieldExpr);
     $$->is_expression=false;
@@ -1880,6 +1931,10 @@ as:
   }
   | ID {
     $$ = $1;
+  }
+  | AS SUM_agg {
+    char* str = "sum";
+    $$ = str;
   }
   ;
 load_data_stmt:

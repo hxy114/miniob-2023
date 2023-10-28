@@ -130,6 +130,7 @@ public:
   const char *field_name() const { return field_.field_name(); }
 
   std::string alias_name() { return alias_name_; }
+  void set_alias_name(std::string alias_name) { alias_name_ = alias_name; }
 
   RC get_value(const Tuple &tuple, Value &value) const override;
 

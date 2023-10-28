@@ -101,6 +101,7 @@ struct ExpressionSqlNode{
   std::vector<FieldExpr*>fieldExprs; //for normal select
   bool is_expression= false;
   bool is_value=false;
+  std::unordered_map<std::string, std::string> expr_alias_map;
 };
 /**
  * @brief 描述比较运算符
@@ -198,6 +199,7 @@ struct SelectSqlNode
   std::unordered_map<std::string, std::string>  alias_map; ///< 别名对应关系 alias->relation_name
   bool is_alias_right;
   bool is_expression_select_attr=false;
+  std::unordered_map<std::string, std::string> expr_alias_map;
   std::vector<Expression*> attributes_expression;
   std::vector<StringSqlExpr*>stringsqlExprs;//for agg
   std::vector<FieldExpr*>fieldExprs; //for normal select

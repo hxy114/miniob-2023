@@ -84,6 +84,10 @@ public:
   {
     return col_alias_map_;
   }
+  std::unordered_map<std::string, std::string> expr_alias_map()
+  {
+    return expr_alias_map_;
+  }
   std::vector<Expression*> &expression(){
     return attributes_expression_;
   }
@@ -127,6 +131,7 @@ private:
   bool is_expression_select_attr_;
   std::vector<Expression*> attributes_expression_;
   std::vector<Expression*> all_expressions_;  // 用于无表达式无agg情况下的简单查询(Function)
+  std::unordered_map<std::string, std::string> expr_alias_map_;
   //std::vector<StringSqlExpr*>stringsqlExprs;//for agg
   //std::vector<FieldExpr*>fieldExprs; //for normal select
 
