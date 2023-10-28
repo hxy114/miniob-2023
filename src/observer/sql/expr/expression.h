@@ -111,9 +111,9 @@ class FieldExpr : public Expression
 {
 public:
   FieldExpr() = default;
-  FieldExpr(const Table *table, const FieldMeta *field) : field_(table, field)
+  FieldExpr(const Table *table, const FieldMeta *field, std::string alias_name="") : field_(table, field), alias_name_(alias_name)
   {}
-  FieldExpr(const Field &field) : field_(field)
+  FieldExpr(const Field &field, std::string alias_name="") : field_(field), alias_name_(alias_name)
   {}
 
   virtual ~FieldExpr() = default;
@@ -129,10 +129,14 @@ public:
 
   const char *field_name() const { return field_.field_name(); }
 
+  std::string alias_name() { return alias_name_; }
+
   RC get_value(const Tuple &tuple, Value &value) const override;
 
 private:
   Field field_;
+  // for create table select
+  std::string alias_name_;
 };
 
 /**
@@ -144,11 +148,11 @@ class FuncExpr : public Expression
 public:
   FuncExpr() = default;
 
-  FuncExpr(const Field &field, Func func, LengthParam lengthparam) : field_(field),func_(LENGTH_FUNC),lengthparam_(lengthparam)
+  FuncExpr(const Field &field, Func func, LengthParam lengthparam, std::string alias_name = "") : field_(field),func_(LENGTH_FUNC),lengthparam_(lengthparam),alias_name_(alias_name)
   {}
-  FuncExpr(const Field &field, Func func, RoundParam roundparam) : field_(field),func_(ROUND_FUNC),roundparam_(roundparam)
+  FuncExpr(const Field &field, Func func, RoundParam roundparam, std::string alias_name = "") : field_(field),func_(ROUND_FUNC),roundparam_(roundparam),alias_name_(alias_name)
   {}
-  FuncExpr(const Field &field, Func func, FormatParam formatparam) : field_(field),func_(FORMAT_FUNC),formatparam_(formatparam)
+  FuncExpr(const Field &field, Func func, FormatParam formatparam, std::string alias_name = "") : field_(field),func_(FORMAT_FUNC),formatparam_(formatparam),alias_name_(alias_name)
   {}
 
   virtual ~FuncExpr() = default;
@@ -182,6 +186,8 @@ public:
     formatparam_ = *formatparam;
   }
 
+  std::string alias_name() { return alias_name_; }
+
   void set_func(Func func) { func_ = func; }
 
   const char *table_name() const { return field_.table_name(); }
@@ -198,6 +204,8 @@ private:
   LengthParam lengthparam_;
   RoundParam roundparam_;
   FormatParam formatparam_;
+
+  std::string alias_name_; // 用于create table select创建表
 };
 
 /**
@@ -213,13 +221,24 @@ public:
   ExprType type() const override { return ExprType::STRINGSQL; }
   void setType(AttrType attrType){type_=attrType;}
   AttrType value_type() const override { return type_; }
+  
+  void set_length(size_t length) { length_ = length; }
+  size_t length() { return length_; }
 
+  void set_is_null(bool is_null) { is_null_ = is_null; }
+  bool is_null() { return is_null_; }
+
+  void set_alias_name(std::string alias_name) { alias_name_ = alias_name; }
+  std::string alias_name() { return alias_name_; }
 
   RC get_value(const Tuple &tuple, Value &value) const override;
 
 private:
   AttrType type_;
-
+  // 用于create table select
+  size_t length_ = 4;
+  bool is_null_ = true;
+  std::string alias_name_;
 };
 /**
  * @brief 常量值表达式
@@ -229,7 +248,7 @@ class ValueExpr : public Expression
 {
 public:
   ValueExpr() = default;
-  explicit ValueExpr(const Value &value) : value_(value)
+  explicit ValueExpr(const Value &value, std::string alias_name="") : value_(value),alias_name_(alias_name)
   {}
 
   virtual ~ValueExpr() = default;
@@ -241,12 +260,17 @@ public:
 
   AttrType value_type() const override { return value_.attr_type(); }
 
+  void set_alias_name(std::string alias_name) { alias_name_ = alias_name; }
+  std::string alias_name() { return alias_name_; }
+
   void get_value(Value &value) const { value = value_; }
 
   const Value &get_value() const { return value_; }
 
 private:
   Value value_;
+  // for create table select
+  std::string alias_name_;
 };
 /**
  * @brief 字段表达式

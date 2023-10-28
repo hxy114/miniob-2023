@@ -26,6 +26,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/explain_logical_operator.h"
 #include "sql/operator/agg_logical_operator.h"
 #include "sql/operator/order_logical_operator.h"
+#include "sql/operator/create_table_select_logical_operator.h"
 
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/calc_stmt.h"
@@ -35,6 +36,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/delete_stmt.h"
 #include "sql/stmt/explain_stmt.h"
 #include "sql/stmt/update_stmt.h"
+#include "sql/stmt/create_table_stmt.h"
 
 using namespace std;
 
@@ -71,6 +73,16 @@ RC LogicalPlanGenerator::create(Stmt *stmt, unique_ptr<LogicalOperator> &logical
       ExplainStmt *explain_stmt = static_cast<ExplainStmt *>(stmt);
       rc = create_plan(explain_stmt, logical_operator);
     } break;
+
+    // create table select
+    case StmtType::CREATE_TABLE: {
+      CreateTableStmt *create_table_stmt = static_cast<CreateTableStmt *>(stmt);
+      if (!create_table_stmt->has_select()) {
+        return RC::UNIMPLENMENT;
+      }
+      rc = create_plan(create_table_stmt, logical_operator);
+    } break;
+
     default: {
       rc = RC::UNIMPLENMENT;
     }
@@ -406,5 +418,20 @@ RC LogicalPlanGenerator::create_plan(
 
   logical_operator = unique_ptr<LogicalOperator>(new ExplainLogicalOperator);
   logical_operator->add_child(std::move(child_oper));
+  return rc;
+}
+
+RC LogicalPlanGenerator::create_plan(
+  CreateTableStmt *create_table_stmt, std::unique_ptr<LogicalOperator> &logical_operator)
+{
+  unique_ptr<LogicalOperator> select_oper;
+  RC rc = create_plan(static_cast<SelectStmt *>(create_table_stmt->select_stmt()), select_oper);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create select operator for create table as select. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  logical_operator = unique_ptr<LogicalOperator>(new CreateTableSelectLogicalOperator(create_table_stmt->table_name()));
+  logical_operator->add_child(std::move(select_oper));
   return rc;
 }

@@ -27,7 +27,6 @@ InsertPhysicalOperator::InsertPhysicalOperator(Table *table, vector<Value> &&val
 RC InsertPhysicalOperator::open(Trx *trx)
 {
 
-
   RC rc;
   const int field_num=table_->table_meta().field_num()-table_->table_meta().sys_field_num();
   for(int j=0;j<values_.size();j+=field_num) {

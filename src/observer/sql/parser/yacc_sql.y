@@ -148,6 +148,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   LengthParam *                     length_func_param;
   RoundParam *                      round_func_param;
   FormatParam *                     format_func_param;
+  SelectSqlNode *                   select_sql_node;
 }
 
 %token <number> NUMBER
@@ -210,6 +211,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <order_by>         order
 %type <order_by>         order_by_list
 %type <string>              as
+%type <select_sql_node>     create_as
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -385,7 +387,17 @@ create_table_stmt:    /*create table 语句的语法解析树*/
       }
       create_table.attr_infos.emplace_back(*$5);
       std::reverse(create_table.attr_infos.begin(), create_table.attr_infos.end());
+      create_table.has_select = false;
       delete $5;
+    }
+    | CREATE TABLE ID create_as
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
+      CreateTableSqlNode &create_table = $$->create_table;
+      create_table.relation_name = $3;
+      free($3);
+      create_table.has_select = true;
+      create_table.selectSqlNode = *($4);
     }
     ;
 attr_def_list:
@@ -442,6 +454,13 @@ attr_def:
 
     }
     ;
+
+create_as:
+  AS select_stmt 
+  {
+    $$ = &($2->selection);
+  }
+
 nullable:
    {
    $$=true;

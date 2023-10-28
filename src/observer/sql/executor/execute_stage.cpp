@@ -27,6 +27,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/default/default_handler.h"
 #include "sql/executor/command_executor.h"
 #include "sql/operator/calc_physical_operator.h"
+#include "sql/operator/create_table_select_physical_operator.h"
 
 using namespace std;
 using namespace common;
@@ -219,6 +220,32 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
   }
 
   SqlResult *sql_result = sql_event->session_event()->sql_result();
+  if (stmt->type() == StmtType::CREATE_TABLE) {
+    CommandExecutor command_executor;
+    rc = command_executor.execute(sql_event);
+    if (rc != RC::SUCCESS) {
+      // 建表失败
+      sql_result->set_return_code(rc);
+    } else {
+      // 建表成功，将建好的表指针发送给物理算子，插入要用
+      CreateTableSelectPhysicalOperator *create_table_operator = static_cast<CreateTableSelectPhysicalOperator *>(physical_operator.get());
+      SessionEvent *session_event = sql_event->session_event();
+      Db *db = session_event->session()->get_current_db();
+      if (nullptr == db) {
+        LOG_WARN("invalid argument. db is null");
+        return RC::INVALID_ARGUMENT;
+      }
+
+      Table *table = db->find_table(create_table_operator->table_name().c_str());
+      if (nullptr == table) {
+        return RC::SCHEMA_TABLE_NOT_EXIST;
+      }
+
+      create_table_operator->set_table(table);
+    }
+    sql_result->set_operator(std::move(physical_operator));
+    return rc;
+  }
   sql_result->set_tuple_schema(schema);
   sql_result->set_operator(std::move(physical_operator));
   return rc;

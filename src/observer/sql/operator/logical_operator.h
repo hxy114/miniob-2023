@@ -43,6 +43,7 @@ enum class LogicalOperatorType
   EXPLAIN,    ///< 查看执行计划
   AGG,
   ORDER_BY,
+  CREATE_TABLE_SELECT,
 };
 
 /**

@@ -277,6 +277,8 @@ struct CreateTableSqlNode
 {
   std::string                  relation_name;         ///< Relation name
   std::vector<AttrInfoSqlNode> attr_infos;            ///< attributes
+  bool                         has_select;            ///< 判断是否为create table select
+  SelectSqlNode                selectSqlNode;         ///< 用于create table as [select]
 };
 
 /**

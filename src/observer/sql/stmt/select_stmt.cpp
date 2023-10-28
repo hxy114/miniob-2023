@@ -139,6 +139,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
           for(auto stringSql:select_sql.stringsqlExprs){
             if(stringSql->name().compare(relation_attr.sqlString)==0){
               stringSql->setType(INTS);
+              stringSql->set_alias_name(relation_attr.alias_name);
             }
           }
 
@@ -157,6 +158,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
             for(auto stringSql:select_sql.stringsqlExprs){
               if(stringSql->name().compare(relation_attr.sqlString)==0){
                 stringSql->setType(INTS);
+                stringSql->set_alias_name(relation_attr.alias_name);
               }
             }
           } else {
@@ -174,6 +176,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
               for(auto stringSql:select_sql.stringsqlExprs){
                 if(stringSql->name().compare(relation_attr.sqlString)==0){
                   stringSql->setType(INTS);
+                  stringSql->set_alias_name(relation_attr.alias_name);
                 }
               }
             } else {
@@ -188,10 +191,15 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
                 if(stringSql->name().compare(relation_attr.sqlString)==0){
                   if(relation_attr.agg==MAX_AGG||relation_attr.agg==MIN_AGG||relation_attr.agg==SUM_AGG){
                     stringSql->setType(field_meta->type());
+                    stringSql->set_length(field_meta->len());
+                    stringSql->set_is_null(field_meta->is_null());
+                    stringSql->set_alias_name(relation_attr.alias_name);
                   }else if(relation_attr.agg==COUNT_AGG){
                     stringSql->setType(INTS);
+                    stringSql->set_alias_name(relation_attr.alias_name);
                   }else{
                     stringSql->setType(FLOATS);
+                    stringSql->set_alias_name(relation_attr.alias_name);
                   }
                 }
               }
@@ -215,10 +223,15 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
             if(stringSql->name().compare(relation_attr.sqlString)==0){
               if(relation_attr.agg==MAX_AGG||relation_attr.agg==MIN_AGG||relation_attr.agg==SUM_AGG){
                 stringSql->setType(field_meta->type());
+                stringSql->set_length(field_meta->len());
+                stringSql->set_is_null(field_meta->is_null());
+                stringSql->set_alias_name(relation_attr.alias_name);
               }else if(relation_attr.agg==COUNT_AGG){
                 stringSql->setType(INTS);
+                stringSql->set_alias_name(relation_attr.alias_name);
               }else{
                 stringSql->setType(FLOATS);
+                stringSql->set_alias_name(relation_attr.alias_name);
               }
             }
           }
@@ -580,18 +593,18 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
 
               query_fields.push_back(Field(table, field_meta));
               if (relation_attr.func == NO_FUNC) {
-                all_expressions.push_back(static_cast<Expression*>(new FieldExpr(table, field_meta)));
+                all_expressions.push_back(static_cast<Expression*>(new FieldExpr(table, field_meta, relation_attr.alias_name)));
               } else {
                 switch (relation_attr.func)
                 {
                 case LENGTH_FUNC:
-                  all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), LENGTH_FUNC, relation_attr.lengthparam)));
+                  all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), LENGTH_FUNC, relation_attr.lengthparam, relation_attr.alias_name)));
                   break;
                 case ROUND_FUNC:
-                  all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), ROUND_FUNC, relation_attr.roundparam)));
+                  all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), ROUND_FUNC, relation_attr.roundparam, relation_attr.alias_name)));
                   break;
                 case FORMAT_FUNC:
-                  all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), FORMAT_FUNC, relation_attr.formatparam)));
+                  all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), FORMAT_FUNC, relation_attr.formatparam, relation_attr.alias_name)));
                   break;
                 default:
                   return RC::UNIMPLENMENT;
@@ -604,11 +617,15 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
           if (relation_attr.func != NO_FUNC && relation_attr.attribute_name.empty()) {
             // 输入为原始字符串  e.g. select length('this is a string') as len [from t];
             Value v;
+            std::string cur_alias = relation_attr.alias_name;
             switch (relation_attr.func)
             {
             case LENGTH_FUNC:
             {
               v.set_int(relation_attr.lengthparam.raw_data.get_string().size());
+              if (cur_alias.empty()) {
+                cur_alias = "length(" + '\"' + relation_attr.lengthparam.raw_data.get_string() + '\"' + ")";
+              }
             } break;
             case ROUND_FUNC:
             {
@@ -616,11 +633,17 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
               if (relation_attr.roundparam.bits.length() == 0) {
                 // 只有一个参数
                 v.set_int(round(raw_data));
+                if (cur_alias.empty()) {
+                  cur_alias = "round(" + relation_attr.roundparam.raw_data.to_string() + ")";
+                }
               } else if (relation_attr.roundparam.bits.attr_type() != INTS) {
                 return RC::SQL_SYNTAX;
               } else {
                 raw_data *= pow(10, relation_attr.roundparam.bits.get_int());
                 v.set_float(round(raw_data)/pow(10, relation_attr.roundparam.bits.get_int()));
+                if (cur_alias.empty()) {
+                  cur_alias = "round(" + relation_attr.roundparam.raw_data.to_string() + "," + relation_attr.roundparam.bits.to_string() + ")";
+                }
               }
             } break;
             case FORMAT_FUNC:
@@ -628,12 +651,15 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
               std::string raw_date = relation_attr.formatparam.raw_data.get_string();
               std::string format = relation_attr.formatparam.format.get_string();
               v.set_string(formatDate(raw_date.c_str(), format.c_str()).c_str());
+              if (cur_alias.empty()) {
+                  cur_alias = "date_format(" + '\"' + raw_date + '\"' + "," + '\"' + format + '\"' + ")";
+              }
             } break;
             
             default:
               return RC::UNIMPLENMENT;
             }
-            all_expressions.push_back(static_cast<Expression*>(new ValueExpr(v)));
+            all_expressions.push_back(static_cast<Expression*>(new ValueExpr(v, cur_alias)));
             continue;
           }
 
@@ -651,18 +677,18 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
 
           query_fields.push_back(Field(table, field_meta));
           if (relation_attr.func == NO_FUNC) {
-            all_expressions.push_back(static_cast<Expression*>(new FieldExpr(table, field_meta)));
+            all_expressions.push_back(static_cast<Expression*>(new FieldExpr(table, field_meta, relation_attr.alias_name)));
           } else {
             switch (relation_attr.func)
             {
             case LENGTH_FUNC:
-              all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), LENGTH_FUNC, relation_attr.lengthparam)));
+              all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), LENGTH_FUNC, relation_attr.lengthparam, relation_attr.alias_name)));
               break;
             case ROUND_FUNC:
-              all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), ROUND_FUNC, relation_attr.roundparam)));
+              all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), ROUND_FUNC, relation_attr.roundparam, relation_attr.alias_name)));
               break;
             case FORMAT_FUNC:
-              all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), FORMAT_FUNC, relation_attr.formatparam)));
+              all_expressions.push_back(static_cast<Expression*>(new FuncExpr(Field(table, field_meta), FORMAT_FUNC, relation_attr.formatparam, relation_attr.alias_name)));
               break;
             default:
               return RC::UNIMPLENMENT;

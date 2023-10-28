@@ -294,7 +294,14 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
     }
 
     return rc;
-  }else{
+  } else if (sql_result->get_type()==PhysicalOperatorType::CREATE_TABLE_SELECT) {
+    rc = sql_result->open();
+    if (OB_FAIL(rc)) {
+      sql_result->close();
+    }
+    sql_result->set_return_code(rc);
+    return write_state(event, need_disconnect);
+  } else{
     rc = sql_result->open();
     if (OB_FAIL(rc)) {
       sql_result->close();

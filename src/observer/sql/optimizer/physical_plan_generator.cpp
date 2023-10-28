@@ -38,6 +38,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/agg_physical_operator.h"
 #include "sql/operator/order_logical_operator.h"
 #include "sql/operator/order_physical_operator.h"
+#include "sql/operator/create_table_select_logical_operator.h"
+#include "sql/operator/create_table_select_physical_operator.h"
 
 #include "sql/expr/expression.h"
 #include "common/log/log.h"
@@ -89,7 +91,10 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
     }break;
     case LogicalOperatorType::ORDER_BY:{
       return create_plan(static_cast<OrderLogicalOperator &>(logical_operator), oper);
-    }
+    } break;
+    case LogicalOperatorType::CREATE_TABLE_SELECT: {
+      return create_plan(static_cast<CreateTableSelectLogicalOperator &>(logical_operator), oper);
+    } break;
     default: {
       return RC::INVALID_ARGUMENT;
     }
@@ -400,6 +405,33 @@ RC PhysicalPlanGenerator::create_plan(OrderLogicalOperator &order_oper, unique_p
   order_operator->add_child(std::move(child_phy_oper));
 
   oper = unique_ptr<PhysicalOperator>(order_operator);
+
+  LOG_TRACE("create a project physical operator");
+  return rc;
+}
+
+RC PhysicalPlanGenerator::create_plan(CreateTableSelectLogicalOperator &create_table_oper, std::unique_ptr<PhysicalOperator> &oper)
+{
+  vector<unique_ptr<LogicalOperator>> &child_opers = create_table_oper.children();
+
+  unique_ptr<PhysicalOperator> child_phy_oper;
+
+  RC rc = RC::SUCCESS;
+  if (!child_opers.empty()) {
+    LogicalOperator *child_oper = child_opers.front().get();
+    rc = create(*child_oper, child_phy_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create create_table_select logical operator's child physical operator. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+
+  CreateTableSelectPhysicalOperator* create_table_operator = new CreateTableSelectPhysicalOperator(create_table_oper.table_name());
+  if (child_phy_oper) {
+    create_table_operator->add_child(std::move(child_phy_oper));
+  }
+
+  oper = unique_ptr<PhysicalOperator>(create_table_operator);
 
   LOG_TRACE("create a project physical operator");
   return rc;

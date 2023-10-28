@@ -162,8 +162,9 @@ union YYSTYPE
   LengthParam *                     length_func_param;
   RoundParam *                      round_func_param;
   FormatParam *                     format_func_param;
+  SelectSqlNode *                   select_sql_node;
 
-#line 167 "yacc_sql.hpp"
+#line 168 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -1,8 +1,23 @@
 {
-    "options": {
-        "cwd": "${workspaceFolder}/build"
-    },
+    // "options": {
+    //     "cwd": "${workspaceFolder}/build"
+    // },
     "tasks": [
+        {
+            "label": "build_debug",
+            "type": "shell",
+            "command": "bash build.sh debug",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "gen_parser",
+            "type": "shell",
+            "command": "cd ${workspaceFolder}/src/observer/sql/parser && bash gen_parser.sh"
+        },
         {
             "label": "cmake",
             "command": "cmake",

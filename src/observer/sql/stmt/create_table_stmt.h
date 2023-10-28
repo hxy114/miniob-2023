@@ -29,20 +29,28 @@ class Db;
 class CreateTableStmt : public Stmt
 {
 public:
-  CreateTableStmt(const std::string &table_name, const std::vector<AttrInfoSqlNode> &attr_infos)
+  CreateTableStmt(const std::string &table_name, const std::vector<AttrInfoSqlNode> &attr_infos, bool has_select, Stmt *select_stmt)
         : table_name_(table_name),
-          attr_infos_(attr_infos)
+          attr_infos_(attr_infos),
+          has_select_(has_select),
+          select_stmt_(select_stmt)
   {}
   virtual ~CreateTableStmt() = default;
 
   StmtType type() const override { return StmtType::CREATE_TABLE; }
 
   const std::string &table_name() const { return table_name_; }
+  std::string &table_name() { return table_name_; }
   const std::vector<AttrInfoSqlNode> &attr_infos() const { return attr_infos_; }
+  bool has_select() { return has_select_; }
+  Stmt *select_stmt() { return select_stmt_; }
+  
 
   static RC create(Db *db, const CreateTableSqlNode &create_table, Stmt *&stmt);
 
 private:
   std::string table_name_;
   std::vector<AttrInfoSqlNode> attr_infos_;
+  bool has_select_;
+  Stmt *select_stmt_;
 };
