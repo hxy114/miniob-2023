@@ -971,7 +971,7 @@ expression:
       $$->expression[0]->set_name(token_name(sql_string, &@$));
       $$->is_expression=true;
     }
-    | '-' expression %prec UMINUS as {
+    | '-' expression %prec UMINUS {
     $$=new ExpressionSqlNode;
     $$->expression.push_back( create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, $2->expression[0], nullptr, sql_string, &@$));
     $$->relAttrSqlNodes.insert($$->relAttrSqlNodes.end(),$2->relAttrSqlNodes.begin(),$2->relAttrSqlNodes.end());
