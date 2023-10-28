@@ -891,11 +891,11 @@ expression:
       if ($4 != nullptr) {
         $$->expr_alias_map[token_name(sql_string, &@$)] = $4;
       }
-      if (!$1->relAttrSqlNodes[0].alias_name.empty()) {
+      if ($1->relAttrSqlNodes.size() != 0 && !$1->relAttrSqlNodes[0].alias_name.empty()) {
         $$->expr_alias_map[token_name(sql_string, &@$)] = $1->relAttrSqlNodes[0].alias_name;
         $1->relAttrSqlNodes[0].alias_name = "";
       }
-      if (!$3->relAttrSqlNodes[0].alias_name.empty()) {
+      if ($3->relAttrSqlNodes.size() != 0 && !$3->relAttrSqlNodes[0].alias_name.empty()) {
         $$->expr_alias_map[token_name(sql_string, &@$)] = $3->relAttrSqlNodes[0].alias_name;
         $3->relAttrSqlNodes[0].alias_name = "";
       }
@@ -913,11 +913,11 @@ expression:
       if ($4 != nullptr) {
         $$->expr_alias_map[token_name(sql_string, &@$)] = $4;
       } 
-      if (!$1->relAttrSqlNodes[0].alias_name.empty()) {
+      if ($1->relAttrSqlNodes.size() != 0 && !$1->relAttrSqlNodes[0].alias_name.empty()) {
         $$->expr_alias_map[token_name(sql_string, &@$)] = $1->relAttrSqlNodes[0].alias_name;
         $1->relAttrSqlNodes[0].alias_name = "";
       }
-      if (!$3->relAttrSqlNodes[0].alias_name.empty()) {
+      if ($3->relAttrSqlNodes.size() != 0 && !$3->relAttrSqlNodes[0].alias_name.empty()) {
         $$->expr_alias_map[token_name(sql_string, &@$)] = $3->relAttrSqlNodes[0].alias_name;
         $3->relAttrSqlNodes[0].alias_name = "";
       }
@@ -935,11 +935,11 @@ expression:
       if ($4 != nullptr) {
         $$->expr_alias_map[token_name(sql_string, &@$)] = $4;
       }
-      if (!$1->relAttrSqlNodes[0].alias_name.empty()) {
+      if ($1->relAttrSqlNodes.size() != 0 && !$1->relAttrSqlNodes[0].alias_name.empty()) {
         $$->expr_alias_map[token_name(sql_string, &@$)] = $1->relAttrSqlNodes[0].alias_name;
         $1->relAttrSqlNodes[0].alias_name = "";
       }
-      if (!$3->relAttrSqlNodes[0].alias_name.empty()) {
+      if ($3->relAttrSqlNodes.size() != 0 && !$3->relAttrSqlNodes[0].alias_name.empty()) {
         $$->expr_alias_map[token_name(sql_string, &@$)] = $3->relAttrSqlNodes[0].alias_name;
         $3->relAttrSqlNodes[0].alias_name = "";
       } 
@@ -957,11 +957,11 @@ expression:
       if ($4 != nullptr) {
         $$->expr_alias_map[token_name(sql_string, &@$)] = $4;
       } 
-      if (!$1->relAttrSqlNodes[0].alias_name.empty()) {
+      if ($1->relAttrSqlNodes.size() != 0 && !$1->relAttrSqlNodes[0].alias_name.empty()) {
         $$->expr_alias_map[token_name(sql_string, &@$)] = $1->relAttrSqlNodes[0].alias_name;
         $1->relAttrSqlNodes[0].alias_name = "";
       }
-      if (!$3->relAttrSqlNodes[0].alias_name.empty()) {
+      if ($3->relAttrSqlNodes.size() != 0 && !$3->relAttrSqlNodes[0].alias_name.empty()) {
         $$->expr_alias_map[token_name(sql_string, &@$)] = $3->relAttrSqlNodes[0].alias_name;
         $3->relAttrSqlNodes[0].alias_name = "";
       }

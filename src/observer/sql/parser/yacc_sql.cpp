@@ -2809,11 +2809,11 @@ yyreduce:
       if ((yyvsp[0].string) != nullptr) {
         (yyval.expression)->expr_alias_map[token_name(sql_string, &(yyloc))] = (yyvsp[0].string);
       }
-      if (!(yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name.empty()) {
+      if ((yyvsp[-3].expression)->relAttrSqlNodes.size() != 0 && !(yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name.empty()) {
         (yyval.expression)->expr_alias_map[token_name(sql_string, &(yyloc))] = (yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name;
         (yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name = "";
       }
-      if (!(yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name.empty()) {
+      if ((yyvsp[-1].expression)->relAttrSqlNodes.size() != 0 && !(yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name.empty()) {
         (yyval.expression)->expr_alias_map[token_name(sql_string, &(yyloc))] = (yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name;
         (yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name = "";
       }
@@ -2836,11 +2836,11 @@ yyreduce:
       if ((yyvsp[0].string) != nullptr) {
         (yyval.expression)->expr_alias_map[token_name(sql_string, &(yyloc))] = (yyvsp[0].string);
       } 
-      if (!(yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name.empty()) {
+      if ((yyvsp[-3].expression)->relAttrSqlNodes.size() != 0 && !(yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name.empty()) {
         (yyval.expression)->expr_alias_map[token_name(sql_string, &(yyloc))] = (yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name;
         (yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name = "";
       }
-      if (!(yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name.empty()) {
+      if ((yyvsp[-1].expression)->relAttrSqlNodes.size() != 0 && !(yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name.empty()) {
         (yyval.expression)->expr_alias_map[token_name(sql_string, &(yyloc))] = (yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name;
         (yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name = "";
       }
@@ -2863,11 +2863,11 @@ yyreduce:
       if ((yyvsp[0].string) != nullptr) {
         (yyval.expression)->expr_alias_map[token_name(sql_string, &(yyloc))] = (yyvsp[0].string);
       }
-      if (!(yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name.empty()) {
+      if ((yyvsp[-3].expression)->relAttrSqlNodes.size() != 0 && !(yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name.empty()) {
         (yyval.expression)->expr_alias_map[token_name(sql_string, &(yyloc))] = (yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name;
         (yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name = "";
       }
-      if (!(yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name.empty()) {
+      if ((yyvsp[-1].expression)->relAttrSqlNodes.size() != 0 && !(yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name.empty()) {
         (yyval.expression)->expr_alias_map[token_name(sql_string, &(yyloc))] = (yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name;
         (yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name = "";
       } 
@@ -2890,11 +2890,11 @@ yyreduce:
       if ((yyvsp[0].string) != nullptr) {
         (yyval.expression)->expr_alias_map[token_name(sql_string, &(yyloc))] = (yyvsp[0].string);
       } 
-      if (!(yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name.empty()) {
+      if ((yyvsp[-3].expression)->relAttrSqlNodes.size() != 0 && !(yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name.empty()) {
         (yyval.expression)->expr_alias_map[token_name(sql_string, &(yyloc))] = (yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name;
         (yyvsp[-3].expression)->relAttrSqlNodes[0].alias_name = "";
       }
-      if (!(yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name.empty()) {
+      if ((yyvsp[-1].expression)->relAttrSqlNodes.size() != 0 && !(yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name.empty()) {
         (yyval.expression)->expr_alias_map[token_name(sql_string, &(yyloc))] = (yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name;
         (yyvsp[-1].expression)->relAttrSqlNodes[0].alias_name = "";
       }
