@@ -141,7 +141,7 @@ RC AggPhysicalOperator::next()
               }
             }
 
-          }else if(attributes_[i].agg==SUM_AGG||attributes_[i].agg==AVG_AGG){
+          }else if(attributes_[i].agg==AVG_AGG){
             Value value;
             tuple->find_cell(TupleCellSpec(fields_[i].table_name(), fields_[i].field_name()), value);
             if(value.attr_type()!=NULLS){
@@ -170,6 +170,32 @@ RC AggPhysicalOperator::next()
                 }
               }
               count_[i]++;
+            }
+          }else if(attributes_[i].agg==SUM_AGG){
+            Value value;
+            tuple->find_cell(TupleCellSpec(fields_[i].table_name(), fields_[i].field_name()), value);
+            if(value.attr_type()!=NULLS){
+              if(value.attr_type()==CHARS){
+                if(values[i].attr_type()==NULLS){
+                  auto f=common::string2float(value.data());
+                  values[i].set_float(f);
+                }else{
+                  auto f=common::string2float(value.data());
+                  values[i].set_float(values[i].get_float()+f);
+                }
+              }else if(value.attr_type()==INTS){
+                if(values[i].attr_type()==NULLS){
+                  values[i].set_int(value.get_int());
+                }else{
+                  values[i].set_int(values[i].get_int()+value.get_int());
+                }
+              }else if(value.attr_type()==FLOATS){
+                if(values[i].attr_type()==NULLS){
+                  values[i].set_float(value.get_float());
+                }else{
+                  values[i].set_float(values[i].get_float()+value.get_float());
+                }
+              }
             }
           }
         }
@@ -332,7 +358,7 @@ RC AggPhysicalOperator::next()
                 }
               }
 
-            }else if(attributes_[i].agg==SUM_AGG||attributes_[i].agg==AVG_AGG){
+            }else if(attributes_[i].agg==AVG_AGG){
               Value value;
               tuple->find_cell(TupleCellSpec(fields_[i].table_name(), fields_[i].field_name()), value);
               if(value.attr_type()!=NULLS){
@@ -361,6 +387,32 @@ RC AggPhysicalOperator::next()
                   }
                 }
                 count[i]++;
+              }
+            }else if(attributes_[i].agg==SUM_AGG){
+              Value value;
+              tuple->find_cell(TupleCellSpec(fields_[i].table_name(), fields_[i].field_name()), value);
+              if(value.attr_type()!=NULLS){
+                if(value.attr_type()==CHARS){
+                  if(values[i].attr_type()==NULLS){
+                    auto f=common::string2float(value.data());
+                    values[i].set_float(f);
+                  }else{
+                    auto f=common::string2float(value.data());
+                    values[i].set_float(values[i].get_float()+f);
+                  }
+                }else if(value.attr_type()==INTS){
+                  if(values[i].attr_type()==NULLS){
+                    values[i].set_int(value.get_int());
+                  }else{
+                    values[i].set_int(values[i].get_int()+value.get_int());
+                  }
+                }else if(value.attr_type()==FLOATS){
+                  if(values[i].attr_type()==NULLS){
+                    values[i].set_float(value.get_float());
+                  }else{
+                    values[i].set_float(values[i].get_float()+value.get_float());
+                  }
+                }
               }
             }else if(attributes_[i].agg==NO_AGG){
               Value value;
