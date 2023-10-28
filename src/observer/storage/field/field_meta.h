@@ -31,7 +31,7 @@ class FieldMeta
 {
 public:
   FieldMeta();
-  FieldMeta(const char *name, AttrType attr_type, int attr_offset, int attr_len, bool visible,bool is_null=true);
+  FieldMeta(const char *name, AttrType attr_type=UNDEFINED, int attr_offset=0, int attr_len=0, bool visible= false,bool is_null=true);
   ~FieldMeta() = default;
 
   RC init(const char *name, AttrType attr_type=UNDEFINED, int attr_offset=0, int attr_len=0, bool visible= false,bool is_null= false);

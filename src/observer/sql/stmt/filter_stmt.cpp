@@ -83,8 +83,14 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
     LOG_WARN("No such table: attr.relation_name: %s", attr.relation_name.c_str());
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
+  if(attr.attribute_name=="*"){
+    field=new FieldMeta("*");
+  }else{
+    field = table->table_meta().field(attr.attribute_name.c_str());
+  }
 
-  field = table->table_meta().field(attr.attribute_name.c_str());
+
+
   if (nullptr == field) {
     LOG_WARN("no such field in table: table %s, field %s", table->name(), attr.attribute_name.c_str());
     table = nullptr;

@@ -648,6 +648,81 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
           LOG_WARN("cannot construct filter stmt");
           return rc;
         }
+        std::vector<RelAttrSqlNode> having_rels;
+        auto condition_num=select_sql.group_by.conditions.size();
+        for (int i = 0; i < condition_num; i++) {
+          auto condition=select_sql.group_by.conditions[i];
+          if(condition.left_type==ATTR_TYPE){
+            having_rels.push_back(condition.left_attr);
+          }
+          if(condition.right_type==ATTR_TYPE){
+            having_rels.push_back(condition.right_attr);
+          }
+        }
+
+        // collect query fields in `select` statement
+        std::vector<Field> having_fields;
+        for (int i = static_cast<int>(having_rels.size()) - 1; i >= 0; i--) {
+           RelAttrSqlNode &relation_attr = having_rels[i];
+
+          if (common::is_blank(relation_attr.relation_name.c_str()) &&
+              0 == strcmp(relation_attr.attribute_name.c_str(), "*")) {
+            FieldMeta *field_meta=new FieldMeta;
+            field_meta->init("*");
+            having_fields.push_back(Field(default_table, field_meta));
+
+          } else if (!common::is_blank(relation_attr.relation_name.c_str())) {
+            const char *table_name = relation_attr.relation_name.c_str();
+            const char *field_name = relation_attr.attribute_name.c_str();
+
+            if (0 == strcmp(table_name, "*")) {
+              if (0 != strcmp(field_name, "*")) {
+                LOG_WARN("invalid field name while table is *. attr=%s", field_name);
+                return RC::SCHEMA_FIELD_MISSING;
+              }
+              FieldMeta *field_meta=new FieldMeta;
+              field_meta->init("*");
+              having_fields.push_back(Field(default_table, field_meta));
+            } else {
+              auto iter = table_map.find(table_name);
+              if (iter == table_map.end()) {
+                LOG_WARN("no such table in from list: %s", table_name);
+                return RC::SCHEMA_FIELD_MISSING;
+              }
+
+              Table *table = iter->second;
+              if (0 == strcmp(field_name, "*")) {
+                FieldMeta *field_meta=new FieldMeta;
+                field_meta->init("*");
+                having_fields.push_back(Field(table, field_meta));
+              } else {
+                const FieldMeta *field_meta = table->table_meta().field(field_name);
+                if (nullptr == field_meta) {
+                  LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+                  return RC::SCHEMA_FIELD_MISSING;
+                }
+
+                having_fields.push_back(Field(table, field_meta));
+              }
+            }
+          } else {
+            if (tables.size() != 1) {
+              LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
+              return RC::SCHEMA_FIELD_MISSING;
+            }
+
+            Table *table = tables[0];
+            const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name.c_str());
+            if (nullptr == field_meta) {
+              LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
+              return RC::SCHEMA_FIELD_MISSING;
+            }
+
+            relation_attr.relation_name.assign(table->name());
+            having_fields.push_back(Field(table, field_meta));
+          }
+        }
+
 
         // everything alright
         SelectStmt *select_stmt = new SelectStmt();
@@ -667,6 +742,8 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt,bool 
         select_stmt->is_group_=true;
         select_stmt->group_by_fields_.swap(group_fields);
         select_stmt->having_filter_stmt_=having_stmt;
+        select_stmt->having_rels_.swap(having_rels);
+        select_stmt->having_fields_.swap(having_fields);
         stmt = select_stmt;
         return RC::SUCCESS;
 

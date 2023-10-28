@@ -136,10 +136,10 @@ RC LogicalPlanGenerator::create_plan(
 
     unique_ptr<LogicalOperator> agg_oper;
     if(having_oper){
-      unique_ptr<LogicalOperator> agg_oper_tmp(new AggLogicalOperator(all_attributes,all_fields,select_stmt->expression(),select_stmt->group_by_fields(),having_oper->expressions()[0].release()));
+      unique_ptr<LogicalOperator> agg_oper_tmp(new AggLogicalOperator(all_attributes,all_fields,select_stmt->expression(),select_stmt->group_by_fields(),having_oper->expressions()[0].release(),select_stmt->having_rels(),select_stmt->having_fields()));
       agg_oper=std::move(agg_oper_tmp);
     }else{
-      unique_ptr<LogicalOperator> agg_oper_tmp(new AggLogicalOperator(all_attributes,all_fields,select_stmt->expression(),select_stmt->group_by_fields(), nullptr));
+      unique_ptr<LogicalOperator> agg_oper_tmp(new AggLogicalOperator(all_attributes,all_fields,select_stmt->expression(),select_stmt->group_by_fields(), nullptr,std::vector<RelAttrSqlNode>(),std::vector<Field>()));
       agg_oper=std::move(agg_oper_tmp);
     }
     if (predicate_oper) {

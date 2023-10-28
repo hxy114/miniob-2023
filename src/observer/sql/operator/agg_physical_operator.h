@@ -45,7 +45,7 @@ struct AggregateValue {
 class AggPhysicalOperator : public PhysicalOperator
 {
 public:
-  AggPhysicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields,std::vector<Expression*>&my_expressions, std::vector<Field>& group_fields,Expression * having_expression);
+  AggPhysicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields,std::vector<Expression*>&my_expressions, std::vector<Field>& group_fields,Expression * having_expression,std::vector<RelAttrSqlNode>&having_rels,std::vector<Field>&having_fields);
 
   virtual ~AggPhysicalOperator() = default;
 
@@ -63,7 +63,7 @@ public:
     if(!my_expressions_.empty()){
       return my_expressions_.size();
     }
-    return attributes_.size();
+    return cell_num_;
   }
   RC makeAggKey(Tuple *tuple,AggregateKey &aggregateKey);
   RC makeAggValue(AggregateValue &aggregateValue);
@@ -86,6 +86,9 @@ private:
   Expression* having_expression_;
   bool is_group_by_first_=false;
   std::map<AggregateKey,AggregateValue>::iterator  iter_;
+  std::vector<RelAttrSqlNode>having_rels_;
+  std::vector<Field>having_fields_;
+  int cell_num_;
 };
 
 

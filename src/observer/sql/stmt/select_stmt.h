@@ -103,6 +103,12 @@ public:
   FilterStmt *having_filter_stmt()const{
     return having_filter_stmt_;
   }
+  std::vector<RelAttrSqlNode> &having_rels(){
+      return having_rels_;
+  };
+  std::vector<Field>&having_fields(){
+      return having_fields_;
+  }
 
 private:
   std::vector<Field> query_fields_;
@@ -128,4 +134,6 @@ private:
   std::vector<Field>group_by_fields_;
   bool is_having_;
   FilterStmt *having_filter_stmt_= nullptr;
+  std::vector<RelAttrSqlNode> having_rels_;
+  std::vector<Field>having_fields_;
 };

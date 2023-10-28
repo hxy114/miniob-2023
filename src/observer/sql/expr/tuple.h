@@ -350,7 +350,7 @@ private:
 class ValueListForExpTuple:public  Tuple{
 public:
   ValueListForExpTuple() = default;
-  ValueListForExpTuple(std::vector<std::string> sql_strings):sql_strings_(sql_strings)
+  ValueListForExpTuple(std::vector<std::string> sql_strings,std::vector<RelAttrSqlNode> spec=std::vector<RelAttrSqlNode>()):sql_strings_(sql_strings),spec_(spec)
   {}
   virtual ~ValueListForExpTuple() = default;
 
@@ -376,7 +376,17 @@ public:
 
   virtual RC find_cell(const TupleCellSpec &spec, Value &cell) const override
   {
-    return RC::INTERNAL;
+    const char *table_name = spec.table_name();
+    const char *field_name = spec.field_name();
+    for(int i=0;i<spec_.size();i++){
+      if(spec_[i].agg!=NO_AGG){
+        continue;
+      }
+      if(spec_[i].relation_name.compare(table_name)==0&&spec_[i].attribute_name.compare(field_name)==0){
+        return cells_->cell_at(i,cell);
+      }
+    }
+    return RC::NOTFOUND;
   }
   virtual RC find_cell(const std::string sql_string,Value &cell)const override{
     for(int i=0;i<sql_strings_.size();i++){
@@ -388,6 +398,7 @@ public:
   }
 
 private:
+  std::vector<RelAttrSqlNode>spec_;
   std::vector<std::string >sql_strings_;
   Tuple * cells_;
 };
@@ -404,11 +415,21 @@ public:
   void set_cells(const std::vector<Value> &cells)
   {
     cells_ = cells;
+    size_=0;
+  }
+  void set_num(int num){
+    size_=num;
   }
 
   virtual int cell_num() const override
   {
-    return static_cast<int>(cells_.size());
+    if(size_==0){
+      return static_cast<int>(cells_.size());
+    }else{
+      return size_;
+    }
+
+
   }
 
   virtual RC cell_at(int index, Value &cell) const override
@@ -431,6 +452,7 @@ public:
 
 private:
   std::vector<Value> cells_;
+  int size_=0;
 };
 
 /**

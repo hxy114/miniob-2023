@@ -3,8 +3,8 @@
 //
 #include "sql/operator/agg_physical_operator.h"
 #include "common/lang/string.h"
-AggPhysicalOperator::AggPhysicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields,std::vector<Expression*>&my_expressions, std::vector<Field>& group_fields,Expression * having_expression)
-    : attributes_(attributes),fields_(fields),count_(0),finish_(false),my_expressions_(my_expressions),group_fields_(group_fields),having_expression_(having_expression),is_group_by_first_(true)
+AggPhysicalOperator::AggPhysicalOperator(const std::vector<RelAttrSqlNode>&attributes, const std::vector<Field> &fields,std::vector<Expression*>&my_expressions, std::vector<Field>& group_fields,Expression * having_expression,std::vector<RelAttrSqlNode>&having_rels,std::vector<Field>&having_fields)
+    : attributes_(attributes),fields_(fields),count_(0),finish_(false),my_expressions_(my_expressions),group_fields_(group_fields),having_expression_(having_expression),is_group_by_first_(true),having_rels_(having_rels),having_fields_(having_fields),cell_num_(attributes_.size())
 {}
 
 RC AggPhysicalOperator::open(Trx *trx)
@@ -211,6 +211,10 @@ RC AggPhysicalOperator::next()
   }else{
     RC rc;
     if(is_group_by_first_){
+      if(!having_rels_.empty()){
+        attributes_.insert(attributes_.end(),having_rels_.begin(),having_rels_.end());
+        fields_.insert(fields_.end(),having_fields_.begin(),having_fields_.end());
+      }
       for(;;){
         if(RC::SUCCESS==(rc=children_[0]->next())){
           auto tuple=children_[0]->current_tuple();
@@ -387,6 +391,7 @@ RC AggPhysicalOperator::next()
               }
 
             }
+
             aggValue.aggregates_.set_cells(values);
             aggValue.count_=count;
             iter->second=aggValue;
@@ -400,10 +405,14 @@ RC AggPhysicalOperator::next()
         if(having_expression_!= nullptr){
           Value my_value;
           std::vector<std::string >sql_string;
+          //std::vector<TupleCellSpec>spec;
           for(int i=0;i<attributes_.size();i++){
             sql_string.push_back(attributes_[i].sqlString);
+            //spec.push_back(TupleCellSpec(attributes_[i].relation_name.c_str(),attributes_[i].attribute_name.c_str()));
           }
-          ValueListForExpTuple valueListForExpTuple(sql_string);
+
+
+          ValueListForExpTuple valueListForExpTuple(sql_string,attributes_);
           valueListForExpTuple.set_cells(&iter_->second.aggregates_);
 
           having_expression_->get_value(valueListForExpTuple,my_value);
@@ -430,7 +439,7 @@ RC AggPhysicalOperator::next()
           for(int i=0;i<attributes_.size();i++){
             sql_string.push_back(attributes_[i].sqlString);
           }
-          ValueListForExpTuple valueListForExpTuple(sql_string);
+          ValueListForExpTuple valueListForExpTuple(sql_string,attributes_);
           valueListForExpTuple.set_cells(&iter_->second.aggregates_);
 
           having_expression_->get_value(valueListForExpTuple,my_value);
@@ -466,6 +475,7 @@ Tuple *AggPhysicalOperator::current_tuple()
     return &expression_tuple_;
   }
   if(!group_fields_.empty()){
+    iter_->second.aggregates_.set_num(cell_num_);
     return &iter_->second.aggregates_;
   }
   return &tuple_;
