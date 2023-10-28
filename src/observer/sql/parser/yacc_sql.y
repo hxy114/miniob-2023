@@ -121,6 +121,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         ROUND_func
         FORMAT_func
          TEXT_T
+         GROUP
+         HAVING
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -149,6 +151,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   RoundParam *                      round_func_param;
   FormatParam *                     format_func_param;
   SelectSqlNode *                   select_sql_node;
+  GroupBySqlNode *                  group_by;
 }
 
 %token <number> NUMBER
@@ -212,6 +215,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <order_by>         order_by_list
 %type <string>              as
 %type <select_sql_node>     create_as
+%type <group_by>         group
+%type <condition_list>    having
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -456,7 +461,7 @@ attr_def:
     ;
 
 create_as:
-  AS select_stmt 
+  AS select_stmt
   {
     $$ = &($2->selection);
   }
@@ -654,7 +659,7 @@ update_list:
    }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM ID as rel_list  where order
+    SELECT expression_list FROM ID as rel_list  where order group
          {
            $$ = new ParsedSqlNode(SCF_SELECT);
            if ($2 != nullptr) {
@@ -695,6 +700,13 @@ select_stmt:        /*  select 语句的语法解析树*/
                         delete $8;
            }
            $$->selection.is_sub_select=false;
+
+           if($9!=nullptr){
+           $$->selection.group_by=*$9;
+           $$->selection.is_group_by=true;
+           }else{
+           $$->selection.is_group_by=false;
+           }
            free($4);
          }
           | SELECT expression_list where {
@@ -718,6 +730,32 @@ select_stmt:        /*  select 语句的语法解析树*/
           }
 
     ;
+group:
+       {
+        $$=nullptr;
+       }
+       |GROUP BY rel_attr attr_list having{
+       $$=new GroupBySqlNode;
+         if($4!=nullptr){
+         $$->attrs.insert($$->attrs.end(),$4->begin(),$4->end());
+         }
+         $$->attrs.push_back(*$3);
+         std::reverse($$->attrs.begin(),$$->attrs.end());
+         if($5!=nullptr){
+         $$->conditions.insert($$->conditions.end(),$5->begin(),$5->end());
+         }
+
+       }
+       ;
+having:
+      {
+       $$=nullptr;
+      }
+      |HAVING condition_list {
+         $$ = $2;
+      }
+      ;
+
 order:
   {
   $$=nullptr;

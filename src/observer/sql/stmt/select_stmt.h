@@ -94,6 +94,21 @@ public:
   {
     return all_expressions_;
   }
+  bool is_group(){
+    return is_group_;
+  }
+  std::vector<Field>&group_by_fields(){
+    return group_by_fields_;
+  }
+  FilterStmt *having_filter_stmt()const{
+    return having_filter_stmt_;
+  }
+  std::vector<RelAttrSqlNode> &having_rels(){
+      return having_rels_;
+  };
+  std::vector<Field>&having_fields(){
+      return having_fields_;
+  }
 
 private:
   std::vector<Field> query_fields_;
@@ -114,4 +129,11 @@ private:
   std::vector<Expression*> all_expressions_;  // 用于无表达式无agg情况下的简单查询(Function)
   //std::vector<StringSqlExpr*>stringsqlExprs;//for agg
   //std::vector<FieldExpr*>fieldExprs; //for normal select
+
+  bool is_group_;
+  std::vector<Field>group_by_fields_;
+  bool is_having_;
+  FilterStmt *having_filter_stmt_= nullptr;
+  std::vector<RelAttrSqlNode> having_rels_;
+  std::vector<Field>having_fields_;
 };

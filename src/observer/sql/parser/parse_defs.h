@@ -135,6 +135,7 @@ enum ConditionValueType{
   VALUE_LIST_TYPE,
   SUB_SELECT_TYPE,
   EXPR_TYPE,
+  AGG_TYPE,
 };
 /**
  * @brief 表示一个条件比较
@@ -172,6 +173,10 @@ struct OrderBySqlNode{
   RelAttrSqlNode attrs;
   OrderBySequence orderBySequence=ASC_ORDER_BY;
 };
+struct GroupBySqlNode{
+  std::vector<RelAttrSqlNode> attrs;
+  std::vector<ConditionSqlNode>   conditions;
+};
 /**
  * @brief 描述一个select语句
  * @ingroup SQLParser
@@ -197,6 +202,8 @@ struct SelectSqlNode
   std::vector<StringSqlExpr*>stringsqlExprs;//for agg
   std::vector<FieldExpr*>fieldExprs; //for normal select
 
+  bool is_group_by=false;
+  GroupBySqlNode group_by;
 };
 struct InnerJoinSqlNode
 {

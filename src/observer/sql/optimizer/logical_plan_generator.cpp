@@ -135,7 +135,25 @@ RC LogicalPlanGenerator::create_plan(
   }
 
   if(is_agg){
-    unique_ptr<LogicalOperator> agg_oper(new AggLogicalOperator(all_attributes,all_fields,select_stmt->expression()));
+
+    unique_ptr<LogicalOperator> having_oper;
+    if(select_stmt->having_filter_stmt()) {
+      RC rc = create_plan(select_stmt->having_filter_stmt(), having_oper);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+        return rc;
+      }
+    }
+
+
+    unique_ptr<LogicalOperator> agg_oper;
+    if(having_oper){
+      unique_ptr<LogicalOperator> agg_oper_tmp(new AggLogicalOperator(all_attributes,all_fields,select_stmt->expression(),select_stmt->group_by_fields(),having_oper->expressions()[0].release(),select_stmt->having_rels(),select_stmt->having_fields()));
+      agg_oper=std::move(agg_oper_tmp);
+    }else{
+      unique_ptr<LogicalOperator> agg_oper_tmp(new AggLogicalOperator(all_attributes,all_fields,select_stmt->expression(),select_stmt->group_by_fields(), nullptr,std::vector<RelAttrSqlNode>(),std::vector<Field>()));
+      agg_oper=std::move(agg_oper_tmp);
+    }
     if (predicate_oper) {
       if (table_oper) {
         predicate_oper->add_child(std::move(table_oper));
@@ -264,6 +282,18 @@ RC LogicalPlanGenerator::create_plan(
        left=std::unique_ptr<Expression>(static_cast<Expression*>(new ValueListExpr(filter_obj_left.value_list)));
       }else if(filter_obj_left.filter_type_==EXPR_TYPE){
        left.reset(filter_obj_left.expression);
+      }else if(filter_obj_left.filter_type_==AGG_TYPE){
+       left=std::unique_ptr<Expression>(static_cast<Expression*>(new StringSqlExpr()));
+       left->set_name(filter_obj_left.agg.sqlString);
+       reinterpret_cast<StringSqlExpr*>(left.get())->setType(filter_obj_left.field.attr_type());
+
+       if(filter_obj_left.agg.agg==MAX_AGG||filter_obj_left.agg.agg==MIN_AGG||filter_obj_left.agg.agg==SUM_AGG){
+          reinterpret_cast<StringSqlExpr*>(left.get())->setType(filter_obj_left.field.attr_type());
+       }else if(filter_obj_left.agg.agg==COUNT_AGG){
+          reinterpret_cast<StringSqlExpr*>(left.get())->setType(INTS);
+       }else{
+          reinterpret_cast<StringSqlExpr*>(left.get())->setType(FLOATS);
+       }
       }
 
       if(filter_obj_right.filter_type_==VALUE_TYPE){
@@ -293,6 +323,18 @@ RC LogicalPlanGenerator::create_plan(
        right=std::unique_ptr<Expression>(static_cast<Expression*>(new ValueListExpr(filter_obj_right.value_list)));
       }else if(filter_obj_right.filter_type_==EXPR_TYPE){
        right.reset(filter_obj_right.expression);
+      }else if(filter_obj_right.filter_type_==AGG_TYPE){
+       right=std::unique_ptr<Expression>(static_cast<Expression*>(new StringSqlExpr()));
+       right->set_name(filter_obj_right.agg.sqlString);
+       reinterpret_cast<StringSqlExpr*>(right.get())->setType(filter_obj_right.field.attr_type());
+
+       if(filter_obj_right.agg.agg==MAX_AGG||filter_obj_right.agg.agg==MIN_AGG||filter_obj_right.agg.agg==SUM_AGG){
+          reinterpret_cast<StringSqlExpr*>(right.get())->setType(filter_obj_right.field.attr_type());
+       }else if(filter_obj_right.agg.agg==COUNT_AGG){
+          reinterpret_cast<StringSqlExpr*>(right.get())->setType(INTS);
+       }else{
+          reinterpret_cast<StringSqlExpr*>(right.get())->setType(FLOATS);
+       }
       }
 
 

@@ -138,6 +138,8 @@ exists                                  RETURN_TOKEN(EXISTS);
 or                                      RETURN_TOKEN(OR);
 as                                      RETURN_TOKEN(AS);
 text                                    RETURN_TOKEN(TEXT_T);
+group                                   RETURN_TOKEN(GROUP);
+having                                  RETURN_TOKEN(HAVING);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     RETURN_TOKEN(RBRACE);
