@@ -24,7 +24,7 @@ See the Mulan PSL v2 for more details. */
 
 class Table;
 class CLogManager;
-
+class View;
 /**
  * @brief 一个DB实例负责管理一批表
  * @details 当前DB的存储模式很简单，一个DB对应一个目录，所有的表和数据都放置在这个目录下。
@@ -48,6 +48,7 @@ public:
   RC create_table(const char *table_name, int attribute_count, const AttrInfoSqlNode *attributes);
   RC drop_table(Table *table_name);
   Table *find_table(const char *table_name) const;
+  View *find_view(const char *view_name) const;
   Table *find_table(int32_t table_id) const;
 
   const char *name() const;
@@ -71,4 +72,5 @@ private:
 
   /// 给每个table都分配一个ID，用来记录日志。这里假设所有的DDL都不会并发操作，所以相关的数据都不上锁
   int32_t next_table_id_ = 0;
+  std::unordered_map<std::string,View*>opened_views_;
 };

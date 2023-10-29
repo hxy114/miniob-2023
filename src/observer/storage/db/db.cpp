@@ -125,7 +125,14 @@ Table *Db::find_table(const char *table_name) const
   }
   return nullptr;
 }
-
+View *Db::find_view(const char *view_name) const
+{
+  std::unordered_map<std::string, View *>::const_iterator iter = opened_views_.find(view_name);
+  if (iter != opened_views_.end()) {
+    return iter->second;
+  }
+  return nullptr;
+}
 Table *Db::find_table(int32_t table_id) const
 {
   for (auto pair : opened_tables_) {

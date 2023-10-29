@@ -452,6 +452,7 @@ public:
 
 private:
   std::vector<Value> cells_;
+
   int size_=0;
 };
 
