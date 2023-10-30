@@ -1316,6 +1316,19 @@ arg_list:
         }
         $$->push_back($1);
     }
+    |DATA COMMA arg_list{
+        if($3!=nullptr){
+            $$=$3;
+            }else{
+            $$=new std::vector<std::string>;
+            }
+            $$->push_back("data");
+    }
+    | DATA {
+    	$$=new std::vector<std::string>;
+    	$$->push_back("data");
+    }
+    ;
 rel_attr:
     ID as{
       $$ = new RelAttrSqlNode;
