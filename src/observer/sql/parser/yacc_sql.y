@@ -557,6 +557,18 @@ insert_stmt:        /*insert   语句的语法解析树*/
       delete $5;
       free($3);
     }
+    | INSERT INTO ID LBRACE attr_def attr_def_list RBRACE VALUES insert_value insert_values
+          {
+            $$ = new ParsedSqlNode(SCF_INSERT);
+            $$->insertion.relation_name = $3;
+            if ($10 != nullptr) {
+              $$->insertion.values.swap(*$10);
+            }
+            $$->insertion.values.insert($$->insertion.values.end(),$9->begin(),$9->end());
+            std::reverse($$->insertion.values.begin(), $$->insertion.values.end());
+            delete $9;
+            free($3);
+          }
     ;
 insert_value:
     LBRACE value value_list RBRACE {
