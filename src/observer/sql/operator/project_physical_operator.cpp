@@ -82,6 +82,9 @@ Tuple *ProjectPhysicalOperator::current_tuple()
 {
   if (expressions_.size() == 0 && !children_.empty()) {
     if(my_expressions_.size()>0){
+      std::map<string,RID>rid_map;
+      children_[0]->current_tuple()->get_all_rid_map(rid_map);
+      valueListTuple_.set_rid_map(rid_map);
       return  &valueListTuple_;
     } else if (all_expressions_.size() > 0) {
       std::vector<Value> values;
@@ -92,6 +95,9 @@ Tuple *ProjectPhysicalOperator::current_tuple()
         all_expressions_[i]->get_value(*cur_tuple, v);
         values[i] = v;
       }
+      std::map<string,RID>rid_map;
+      children_[0]->current_tuple()->get_all_rid_map(rid_map);
+      valueListTuple_.set_rid_map(rid_map);
       valueListTuple_.set_cells(values);
       return &valueListTuple_;
     }

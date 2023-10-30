@@ -34,6 +34,9 @@ RC UpdateStmt::create(Db *db,  UpdateSqlNode &update, Stmt *&stmt)
 
   // check whether the table exists
   Table *table = db->find_table(table_name);
+  if(table->is_view()&&!table->can_update()){
+    return RC::INVALID_ARGUMENT;
+  }
   std::map<int,Value>values_map;
   std::map<int,SelectStmt*>select_map;
 
@@ -172,6 +175,7 @@ RC UpdateStmt::create(Db *db,  UpdateSqlNode &update, Stmt *&stmt)
     values_map[i]=value;
 
     }
+
     // if (field_meta->type() == DATES) {
     //   int time_distance = *(int *)value.data;
     //   if (!date_is_legal(time_distance)) {
@@ -179,6 +183,19 @@ RC UpdateStmt::create(Db *db,  UpdateSqlNode &update, Stmt *&stmt)
     //     return RC::SCHEMA_FIELD_MISSING;
     //   }  
     // }
+  }
+  if(table->is_view()){
+    std::set<std::string>table_name_set;
+    for(int i=0;i<field_list.size();i++){
+    if(table->origin_fields()[field_list[i]->offset()]== nullptr){
+        return RC::INVALID_ARGUMENT;
+    }else{
+        table_name_set.insert(table->origin_fields()[field_list[i]->offset()]->table_name());
+    }
+    if(table_name_set.size()>1){
+        return RC::INVALID_ARGUMENT;
+    }
+    }
   }
   // create filter statement in `where` statement
   FilterStmt *filter_stmt = nullptr;
@@ -197,6 +214,7 @@ RC UpdateStmt::create(Db *db,  UpdateSqlNode &update, Stmt *&stmt)
     LOG_WARN("cannot construct filter stmt");
     return rc;
   }
+
 
   stmt = new UpdateStmt(table, values_map, select_map,filter_stmt, field_list);
   return RC::SUCCESS;

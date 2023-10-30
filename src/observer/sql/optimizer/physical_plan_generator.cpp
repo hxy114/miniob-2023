@@ -41,7 +41,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/create_table_select_logical_operator.h"
 #include "sql/operator/create_table_select_physical_operator.h"
 #include "sql/operator/valuelist_get_physical_operator.h"
-
+#include "sql/operator/view_update_physical_operator.h"
 #include "sql/expr/expression.h"
 #include "common/log/log.h"
 #include "logical_plan_generator.h"
@@ -327,7 +327,13 @@ RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, std::u
 
   Table *table = update_oper.table();
 
-  oper = unique_ptr<PhysicalOperator>(new UpdatePhysicalOperator(table, update_oper.field_meta(), update_oper.value_map(),update_oper.select_map()));
+
+  if(table->is_view()){
+    oper = unique_ptr<PhysicalOperator>(new ViewUpdatePhysicalOperator(table, update_oper.field_meta(), update_oper.value_map(),update_oper.select_map()));
+  }else{
+    oper = unique_ptr<PhysicalOperator>(new UpdatePhysicalOperator(table, update_oper.field_meta(), update_oper.value_map(),update_oper.select_map()));
+  }
+
 
   if (child_physical_oper) {
     oper->add_child(std::move(child_physical_oper));
