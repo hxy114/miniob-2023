@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <functional>
 #include "storage/table/table_meta.h"
+#include "sql/stmt/select_stmt.h"
 
 struct RID;
 class Record;
@@ -28,7 +29,7 @@ class Index;
 class IndexScanner;
 class RecordDeleter;
 class Trx;
-
+class Field;
 /**
  * @brief 表
  * 
@@ -53,6 +54,9 @@ public:
             const char *base_dir, 
             int attribute_count, 
             const AttrInfoSqlNode attributes[]);
+  Table(std::string view_name, SelectStmt select_stmt, std::vector<FieldMeta> &field_metas,
+      std::vector<Field*> &origin_fields, bool can_insert, bool can_update);
+
 
   /**
    * 打开一个表
@@ -112,10 +116,23 @@ public:
   Index *find_index(const char *index_name) const;
   Index *find_index_by_field(const char *field_name) const;
   std::vector<IndexMeta>get_all_index_meta()const;
+
+
+  SelectStmt &select_stmt() { return select_stmt_; }
+  std::vector<Field*> &origin_fields() { return origin_fields_; }
+  bool can_insert() { return can_insert_; }
+  bool can_update() { return can_update_; }
+  bool is_view(){return is_view_;}
 private:
   std::string base_dir_;
   TableMeta   table_meta_;
   DiskBufferPool *data_buffer_pool_ = nullptr;   /// 数据文件关联的buffer pool
   RecordFileHandler *record_handler_ = nullptr;  /// 记录操作
   std::vector<Index *> indexes_;
+
+  bool is_view_=false;
+  SelectStmt select_stmt_;
+  std::vector<Field*> origin_fields_; //原始表的field
+  bool can_insert_; //多表和虚拟字段false
+  bool can_update_; //有聚合函数时为false
 };

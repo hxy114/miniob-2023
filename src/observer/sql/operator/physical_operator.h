@@ -50,7 +50,8 @@ enum class PhysicalOperatorType
   UPDATE,
   AGG,
   ORDERBY,
-  CREATE_TABLE_SELECT
+  CREATE_TABLE_SELECT,
+  VALUELIST_GET,
 };
 
 /**

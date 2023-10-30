@@ -123,6 +123,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
          TEXT_T
          GROUP
          HAVING
+         VIEW
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -190,6 +191,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            update_stmt
 %type <sql_node>            delete_stmt
 %type <sql_node>            create_table_stmt
+%type <sql_node>            create_view_stmt
 %type <sql_node>            drop_table_stmt
 %type <sql_node>            show_tables_stmt
 %type <sql_node>            desc_table_stmt
@@ -239,6 +241,7 @@ command_wrapper:
   | update_stmt
   | delete_stmt
   | create_table_stmt
+  | create_view_stmt
   | drop_table_stmt
   | show_tables_stmt
   | desc_table_stmt
@@ -423,6 +426,34 @@ create_table_stmt:    /*create table 语句的语法解析树*/
       delete $5;
     }
     ;
+create_view_stmt:    /*create view 语句的语法解析树*/
+        CREATE VIEW ID create_as
+        {
+          $$ = new ParsedSqlNode(SCF_CREATE_VIEW);
+          CreateViewSqlNode &create_view = $$->create_view;
+          create_view.view_name = $3;
+          free($3);
+          create_view.selectSqlNode = *($4);
+        }
+        | CREATE VIEW ID LBRACE attr_def attr_def_list RBRACE create_as
+        {
+          $$ = new ParsedSqlNode(SCF_CREATE_VIEW);
+          CreateViewSqlNode &create_view = $$->create_view;
+          create_view.view_name = $3;
+          free($3);
+
+          std::vector<AttrInfoSqlNode> *src_attrs = $6;
+          if (src_attrs != nullptr) {
+            create_view.attr_infos.swap(*src_attrs);
+          }
+          create_view.attr_infos.emplace_back(*$5);
+          std::reverse(create_view.attr_infos.begin(), create_view.attr_infos.end());
+
+
+          create_view.selectSqlNode = *($8);
+          delete $5;
+        }
+        ;
 attr_def_list:
     /* empty */
     {

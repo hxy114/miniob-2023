@@ -35,7 +35,13 @@ public:
   ~FieldMeta() = default;
 
   RC init(const char *name, AttrType attr_type=UNDEFINED, int attr_offset=0, int attr_len=0, bool visible= false,bool is_null= false);
-
+  bool operator ==(const FieldMeta& other)const {
+    if(name_==other.name_&&attr_type_==other.attr_type_&&attr_offset_==other.attr_offset_&&
+    attr_len_==other.attr_len_&&visible_==other.visible_&&is_null_==other.is_null_){
+      return true;
+    }
+    return false;
+  }
 public:
   const char *name() const;
   AttrType type() const;

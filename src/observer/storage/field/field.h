@@ -14,9 +14,10 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
-#include "storage/table/table.h"
-#include "storage/field/field_meta.h"
 
+#include "storage/field/field_meta.h"
+class Table;
+class Record;
 /**
  * @brief 字段
  * 
@@ -43,10 +44,7 @@ public:
     return field_->type();
   }
 
-  const char *table_name() const
-  {
-    return table_->name();
-  }
+  const char *table_name() const;
   const char *field_name() const
   {
     return field_->name();

@@ -48,6 +48,9 @@ public:
   RC create_table(const char *table_name, int attribute_count, const AttrInfoSqlNode *attributes);
   RC drop_table(Table *table_name);
   Table *find_table(const char *table_name) const;
+  void set_table(std::string table_name, Table *table) {
+    opened_tables_[table_name] = table;
+  }
   Table *find_table(int32_t table_id) const;
 
   const char *name() const;

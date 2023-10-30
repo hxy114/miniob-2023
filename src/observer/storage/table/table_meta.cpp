@@ -95,7 +95,10 @@ RC TableMeta::init(int32_t table_id, const char *name, int field_num, const Attr
   LOG_INFO("Sussessfully initialized table meta. table id=%d, name=%s", table_id, name);
   return RC::SUCCESS;
 }
-
+RC TableMeta::init(std::string name,std::vector<FieldMeta> fields){
+  name_=name;
+  fields_=fields;
+}
 RC TableMeta::add_index(const IndexMeta &index)
 {
   indexes_.push_back(index);

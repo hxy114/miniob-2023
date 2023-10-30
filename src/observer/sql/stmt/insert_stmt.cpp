@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 
+
 InsertStmt::InsertStmt(Table *table, const Value *values, int value_amount)
     : table_(table), values_(values), value_amount_(value_amount)
 {}
@@ -31,11 +32,42 @@ RC InsertStmt::create(Db *db,  InsertSqlNode &inserts, Stmt *&stmt)
     return RC::INVALID_ARGUMENT;
   }
 
-  // check whether the table exists
-  Table *table = db->find_table(table_name);
-  if (nullptr == table) {
-    LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name);
-    return RC::SCHEMA_TABLE_NOT_EXIST;
+
+
+  Table *view_table=db->find_table(table_name);
+  Table *table;
+  std::vector<Value>view_values;
+  if (view_table != nullptr&&view_table->is_view()) {
+    if (!view_table->can_insert()) {
+      LOG_WARN("view can not insert. db=%s, view_name=%s", db->name(), table_name);
+      return RC::SQL_SYNTAX;
+    }
+    table = const_cast<Table *>(view_table->origin_fields()[0]->table());
+    if (inserts.values.size()%view_table->table_meta().field_num() !=0) {
+      LOG_WARN("schema mismatch. value num=%d, field num in schema=%d", inserts.values.size(), view_table->table_meta().field_num());
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+    int num=inserts.values.size()/view_table->table_meta().field_num();
+    view_values.resize(num*table->table_meta().field_num());
+    for(int i=0;i<view_values.size();i++){
+      view_values[i].set_null();
+    }
+    for(int i=0;i<inserts.values.size();i++){
+      const FieldMeta *field_meta = (view_table->origin_fields()[i%view_table->table_meta().field_num()]->meta());
+      for(int j=0;j<table->table_meta().field_num();j++){
+        if((*field_meta)==(*(table->table_meta().field_metas()))[j]){
+          view_values[j+(i/table->table_meta().field_num())*table->table_meta().field_num()]=inserts.values[i];
+        }
+      }
+    }
+    inserts.values = view_values;
+  } else {
+    // check whether the table exists
+    table = db->find_table(table_name);
+    if (nullptr == table) {
+      LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name);
+      return RC::SCHEMA_TABLE_NOT_EXIST;
+    }
   }
 
   // check the fields number

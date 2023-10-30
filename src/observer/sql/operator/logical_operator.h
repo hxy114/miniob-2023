@@ -44,6 +44,7 @@ enum class LogicalOperatorType
   AGG,
   ORDER_BY,
   CREATE_TABLE_SELECT,
+  VALUELIST_GET,
 };
 
 /**

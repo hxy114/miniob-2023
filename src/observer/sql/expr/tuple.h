@@ -109,7 +109,9 @@ public:
    */
   virtual RC find_cell(const TupleCellSpec &spec, Value &cell) const = 0;
   virtual RC find_cell(const std::string sql_string,Value &cell)const{return RC::INTERNAL;}
-
+  virtual RC get_all_rid_map(std::map<string,RID>&rid_map){
+    return RC::INTERNAL;
+  }
   virtual std::string to_string() const
   {
     std::string str;
@@ -151,7 +153,10 @@ public:
   {
     this->record_ = record;
   }
-
+  RC get_all_rid_map(std::map<string,RID>&rid_map){
+    rid_map[table_->name()]=record_->rid();
+    return RC::SUCCESS;
+  }
   void set_schema(const Table *table, const std::vector<FieldMeta> *fields)
   {
     table_ = table;
@@ -285,7 +290,9 @@ public:
     const TupleCellSpec *spec = speces_[index];
     return tuple_->find_cell(*spec, cell);
   }
-
+  RC get_all_rid_map(std::map<string,RID>&rid_map){
+    return tuple_->get_all_rid_map(rid_map);
+  }
   RC find_cell(const TupleCellSpec &spec, Value &cell) const override
   {
     return tuple_->find_cell(spec, cell);
@@ -417,6 +424,22 @@ public:
     cells_ = cells;
     size_=0;
   }
+  void set_rid_map(std::map<string,RID>&rid_map){
+    rid_map_=rid_map;
+  }
+  void set_schema(const Table *table, const std::vector<FieldMeta> *fields)
+  {
+    table_ = table;
+    for (FieldExpr *spec : speces_) {
+      delete spec;
+    }
+    speces_.clear();
+
+    //this->speces_.resize(fields->size());
+    for (const FieldMeta &field : *fields) {
+      speces_.push_back(new FieldExpr(table, &field));
+    }
+  }
   void set_num(int num){
     size_=num;
   }
@@ -441,17 +464,37 @@ public:
     cell = cells_[index];
     return RC::SUCCESS;
   }
-
+  
   virtual RC find_cell(const TupleCellSpec &spec, Value &cell) const override
   {
-    return RC::INTERNAL;
+    const char *table_name = spec.table_name();
+    const char *field_name = spec.field_name();
+    if (0 != strcmp(table_name, table_->name())) {
+      return RC::NOTFOUND;
+    }
+
+    for (size_t i = 0; i < speces_.size(); ++i) {
+      const FieldExpr *field_expr = speces_[i];
+      const Field &field = field_expr->field();
+      if (0 == strcmp(field_name, field.field_name())) {
+        return cell_at(i, cell);
+      }
+    }
+    return RC::NOTFOUND;
   }
   std::vector<Value>&values(){
     return cells_;
   }
+  RC get_all_rid_map(std::map<string,RID>&rid_map){
+    rid_map.insert(rid_map_.begin(),rid_map_.end());
+    return RC::SUCCESS;
+  }
 
 private:
   std::vector<Value> cells_;
+  std::vector<FieldExpr *> speces_;
+  std::map<string,RID>rid_map_;
+  const Table *table_;
   int size_=0;
 };
 
@@ -502,6 +545,16 @@ public:
     }
 
     return right_->find_cell(spec, value);
+  }
+  RC get_all_rid_map(std::map<string,RID>&rid_map){
+    RC rc=RC::SUCCESS;
+    if((rc=left_->get_all_rid_map(rid_map))!=RC::SUCCESS){
+      return rc;
+    }
+    if((rc=right_->get_all_rid_map(rid_map))!=RC::SUCCESS){
+      return rc;
+    }
+    return rc;
   }
 
 private:

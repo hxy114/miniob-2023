@@ -1,39 +1,44 @@
-/* Copyright (c) 2021 OceanBase and/or its affiliates. All rights reserved.
-miniob is licensed under Mulan PSL v2.
-You can use this software according to the terms and conditions of the Mulan PSL v2.
-You may obtain a copy of Mulan PSL v2 at:
-         http://license.coscl.org.cn/MulanPSL2
-THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-See the Mulan PSL v2 for more details. */
-
-//
-// Created by Wangyunlai on 2023/6/13.
-//
-
-#include "sql/stmt/create_table_stmt.h"
 #include "event/sql_debug.h"
 #include "sql/stmt/select_stmt.h"
+#include "sql/stmt/create_view_stmt.h"
 #include "common/log/log.h"
+#include "storage/db/db.h"
 #include "sql/expr/expression.h"
 
-RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt *&stmt)
+
+RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&stmt)
 {
-  RC rc = RC::SUCCESS;
-  Stmt *select_stmt = nullptr;
-  std::vector<AttrInfoSqlNode> select_attr_infos;
-  if (create_table.has_select) {
-    rc = SelectStmt::create(db, create_table.selectSqlNode, select_stmt);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to create select_stmt for create_table. rc=%d:%s", rc, strrc(rc));
-      return rc;
+    RC rc = RC::SUCCESS;
+
+    if (nullptr == db) {
+        LOG_WARN("invalid argument. db is null");
+        return RC::INVALID_ARGUMENT;
     }
 
+    std::string view_name = create_view.view_name;
+    if (view_name.empty()) {
+        LOG_WARN("invalid argument. view name is null");
+        return RC::INVALID_ARGUMENT;
+    }
+
+    if (db->find_table(view_name.c_str()) != nullptr) {
+        LOG_WARN("view exists.");
+        return RC::INVALID_ARGUMENT;
+    }
+
+    Stmt *select_stmt = nullptr;
+    rc = SelectStmt::create(db, create_view.selectSqlNode, select_stmt);
+    
     SelectStmt *tmp_stmt = static_cast<SelectStmt *>(select_stmt);
+    std::vector<AttrInfoSqlNode> select_attr_infos;
+    std::vector<Field*> origin_fields;
+
     bool is_one_table = tmp_stmt->tables().size() > 1 ? false : true;
+    bool has_virtual = false;
+    bool can_update = true;
     if (tmp_stmt->expression().size() != 0) {
       // 有表达式的情况(无func)
+      has_virtual = true;  // 有表达式这个虚拟字段
       std::vector<Expression*> attributes_expression = tmp_stmt->expression();
       for (auto expr:attributes_expression) {
         AttrInfoSqlNode attr_info;
@@ -51,6 +56,9 @@ RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt 
           }
           attr_info.length = tmp->field().meta()->len();
           attr_info.is_null = tmp->field().meta()->is_null();
+
+          Field *tmp_field = new Field(tmp->field());
+          origin_fields.push_back(tmp_field);
         } break;
         case ExprType::VALUE:
         { // 可能不会出现，先不管
@@ -59,6 +67,8 @@ RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt 
           attr_info.name = tmp->get_value().to_string();
           attr_info.length = tmp->get_value().length();
           attr_info.is_null = true;
+
+          origin_fields.push_back(nullptr);
         } break;
         case ExprType::ARITHMETIC:
         {
@@ -70,6 +80,8 @@ RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt 
           }
           attr_info.length = 4;  // 表达式只会返回ints/floats
           attr_info.is_null = true;
+
+          origin_fields.push_back(nullptr);
         } break;
         case ExprType::STRINGSQL:
         {
@@ -81,6 +93,9 @@ RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt 
           }
           attr_info.length = tmp->length();
           attr_info.is_null = tmp->is_null();
+
+          origin_fields.push_back(nullptr);
+          can_update = false;
         } break;
         default:
           return RC::SQL_SYNTAX;
@@ -107,11 +122,11 @@ RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt 
           if (!tmp->alias_name().empty()) {
             attr_info.name = tmp->alias_name();
           }
-          // if (tmp_stmt->col_alias_map().find(field_name) != tmp_stmt->col_alias_map().end()) {
-          //   attr_info.name = tmp_stmt->col_alias_map()[field_name];
-          // }
           attr_info.length = tmp->field().meta()->len();
           attr_info.is_null = tmp->field().meta()->is_null();
+
+          Field *tmp_field = new Field(tmp->field());
+          origin_fields.push_back(tmp_field);
         } break;
         case ExprType::VALUE:
         {
@@ -123,12 +138,16 @@ RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt 
           }
           attr_info.length = tmp->get_value().length();
           attr_info.is_null = true;
+
+          origin_fields.push_back(nullptr);
         } break;
         case ExprType::FUNC:
         {
+          has_virtual = true;   // 有Function这个虚拟字段,虽然可能不会存在这种用例
           FuncExpr *tmp = static_cast<FuncExpr *>(expr);
           attr_info.type = tmp->value_type();
 
+          origin_fields.push_back(nullptr);
           if (!tmp->alias_name().empty()) {
             attr_info.name = tmp->alias_name();
           } else {
@@ -200,8 +219,11 @@ RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt 
 
     } else {
       // 无表达式有Agg无Func,且agg不与字段或*同时出现
+      has_virtual = true; // 有Agg这一虚拟字段
+      can_update = false;
       int agg_index = 0;
       for (Field field:tmp_stmt->query_fields()) {
+        origin_fields.push_back(nullptr);
         AttrInfoSqlNode attr_info;
         std::string table_name = field.table_name();
         std::string field_name = field.field_name();
@@ -259,18 +281,22 @@ RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt 
         agg_index++;
       }
     }
-    
-  }
 
-  std::vector<AttrInfoSqlNode> attr_infos = create_table.attr_infos;
-  if (create_table.attr_infos.size() == 0) {
-    // create table as select 
-    ASSERT(select_attr_infos.size() != 0, "select_attr_infos is empty!");
-    attr_infos = select_attr_infos;
-  }
-  
+    std::vector<FieldMeta> field_metas;
+    for (int i=0; i<select_attr_infos.size(); ++i) {
+      auto &attr_info = select_attr_infos[i];
+      FieldMeta *field_meta = new FieldMeta(attr_info.name.c_str(), attr_info.type, i, attr_info.length, true, true);
+      field_metas.push_back(*field_meta);
+    }
 
-  stmt = new CreateTableStmt(create_table.relation_name, attr_infos, create_table.has_select, select_stmt);
-  sql_debug("create table statement: table name %s", create_table.relation_name.c_str());
-  return RC::SUCCESS;
+    bool can_insert = true; // 有虚拟字段或多表则设置为false
+    if (!is_one_table || has_virtual) {
+        can_insert = false;
+    }
+
+    ASSERT(field_metas.size() == origin_fields.size(), "create view length dis-match");
+
+    stmt = new CreateViewStmt(view_name, static_cast<SelectStmt *>(select_stmt), field_metas, origin_fields, can_insert, can_update);
+    sql_debug("create view statement: view name %s", create_view.view_name.c_str());
+    return rc;
 }

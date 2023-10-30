@@ -28,6 +28,14 @@ See the Mulan PSL v2 for more details. */
 #include "storage/index/index.h"
 #include "storage/index/bplus_tree_index.h"
 #include "storage/trx/trx.h"
+Table::Table(std::string view_name, SelectStmt select_stmt, std::vector<FieldMeta> &field_metas,
+    std::vector<Field*> &origin_fields, bool can_insert, bool can_update)
+    :  select_stmt_(select_stmt),can_insert_(can_insert),can_update_(can_update)
+{
+  origin_fields_.swap(origin_fields);
+  table_meta_.init(view_name,field_metas);
+  is_view_=true;
+}
 
 Table::~Table()
 {
@@ -122,6 +130,7 @@ RC Table::create(int32_t table_id,
   }
 
   base_dir_ = base_dir;
+  is_view_= false;
   LOG_INFO("Successfully create table %s:%s", base_dir, name);
   return rc;
 }
@@ -183,6 +192,7 @@ RC Table::open(const char *meta_file, const char *base_dir)
     }
     indexes_.push_back(index);
   }
+  is_view_= false;
 
   return rc;
 }

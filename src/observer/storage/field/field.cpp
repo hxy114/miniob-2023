@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/value.h"
 #include "storage/record/record.h"
 #include "common/log/log.h"
+#include "storage/table/table.h"
 
 void Field::set_int(Record &record, int value)
 {
@@ -35,4 +36,8 @@ int Field::get_int(const Record &record)
 const char *Field::get_data(const Record &record)
 {
   return record.data() + field_->offset();
+}
+const char *Field::table_name() const
+{
+  return table_->name();
 }

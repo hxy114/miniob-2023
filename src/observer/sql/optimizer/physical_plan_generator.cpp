@@ -40,9 +40,11 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/order_physical_operator.h"
 #include "sql/operator/create_table_select_logical_operator.h"
 #include "sql/operator/create_table_select_physical_operator.h"
+#include "sql/operator/valuelist_get_physical_operator.h"
 
 #include "sql/expr/expression.h"
 #include "common/log/log.h"
+#include "logical_plan_generator.h"
 
 using namespace std;
 
@@ -161,10 +163,71 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
     oper = unique_ptr<PhysicalOperator>(index_scan_oper);
     LOG_TRACE("use index scan");
   } else {
-    auto table_scan_oper = new TableScanPhysicalOperator(table, table_get_oper.readonly());
-    table_scan_oper->set_predicates(std::move(predicates));
-    oper = unique_ptr<PhysicalOperator>(table_scan_oper);
-    LOG_TRACE("use table scan");
+    if(table->is_view()){
+      SelectStmt select_stmt = table->select_stmt();
+      unique_ptr<LogicalOperator> logical_operator;
+      LogicalPlanGenerator logicalPlanGenerator;
+      RC rc = logicalPlanGenerator.create(&select_stmt, logical_operator);
+      if(rc!=RC::SUCCESS){
+        return rc;
+      }
+      unique_ptr<PhysicalOperator> physical_operator;
+      PhysicalPlanGenerator physicalPlanGenerator;
+      rc=physicalPlanGenerator.create(*logical_operator,physical_operator);
+      if(rc!=RC::SUCCESS){
+        return rc;
+      }
+      physical_operator->open(nullptr);
+      std::vector<ValueListTuple>valueListTuples;
+      while(RC::SUCCESS==(rc=physical_operator->next())){
+        ValueListTuple valueListTuple;
+        Tuple *tuple1;
+        tuple1=physical_operator->current_tuple();
+        ValueListTuple* valuelistTuplePtr = dynamic_cast<ValueListTuple*>(tuple1);
+        if (valuelistTuplePtr) {
+          // parentPtr 实际指向 Child1 对象
+          std::map<string,RID>rid_map;
+          valuelistTuplePtr->get_all_rid_map(rid_map);
+          auto values=valuelistTuplePtr->values();
+          valueListTuple.set_cells(values);
+          valueListTuple.set_rid_map(rid_map);
+          valueListTuple.set_schema(table,table->table_meta().field_metas());
+          valueListTuples.push_back(valueListTuple);
+        } else {
+          ProjectTuple *projectTuplePtr=dynamic_cast<ProjectTuple*>(tuple1);
+          std::map<string,RID>rid_map;
+          projectTuplePtr->get_all_rid_map(rid_map
+              );
+          std::vector<Value>values;
+          values.resize(projectTuplePtr->cell_num());
+          for(int i=0;i<projectTuplePtr->cell_num();i++){
+            projectTuplePtr->cell_at(i,values[i]);
+          }
+          valueListTuple.set_cells(values);
+          valueListTuple.set_rid_map(rid_map);
+          valueListTuple.set_schema(table,table->table_meta().field_metas());
+          valueListTuples.push_back(valueListTuple);
+
+        }
+
+
+      }
+      if(rc!=RC::SUCCESS&&rc!=RC::RECORD_EOF){
+        return  rc;
+      }
+
+      auto table_scan_oper = new ValueListGetPhysicalOperator(table, valueListTuples);
+      oper = unique_ptr<PhysicalOperator>(table_scan_oper);
+      LOG_TRACE("use valuelist ");
+
+    }else{
+      auto table_scan_oper = new TableScanPhysicalOperator(table, table_get_oper.readonly());
+      table_scan_oper->set_predicates(std::move(predicates));
+      oper = unique_ptr<PhysicalOperator>(table_scan_oper);
+      LOG_TRACE("use table scan");
+    }
+
+
   }
 
   return RC::SUCCESS;
