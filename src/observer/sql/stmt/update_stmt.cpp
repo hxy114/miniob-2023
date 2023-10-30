@@ -34,15 +34,16 @@ RC UpdateStmt::create(Db *db,  UpdateSqlNode &update, Stmt *&stmt)
 
   // check whether the table exists
   Table *table = db->find_table(table_name);
-  if(table->is_view()&&!table->can_update()){
-    return RC::INVALID_ARGUMENT;
-  }
+  
   std::map<int,Value>values_map;
   std::map<int,SelectStmt*>select_map;
 
   if (table == nullptr) {
     LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name);
     return RC::SCHEMA_TABLE_NOT_EXIST;
+  }
+  if(table->is_view()&&!table->can_update()){
+    return RC::INVALID_ARGUMENT;
   }
 
   // check fields type（目前只支持单个字段）
