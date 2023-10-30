@@ -2001,6 +2001,10 @@ as:
     char* str = "sum";
     $$ = str;
   }
+  | AS DATA {
+  	char* str = "data";
+            $$ = str;
+  }
   ;
 load_data_stmt:
     LOAD DATA INFILE SSS INTO TABLE ID 
