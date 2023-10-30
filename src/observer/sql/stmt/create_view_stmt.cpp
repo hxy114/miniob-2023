@@ -294,6 +294,14 @@ RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&s
         can_insert = false;
     }
 
+    if (create_view.attr_infos.size()!=0) {
+        for (int i=0; i<field_metas.size();i++) {
+          if (!create_view.attr_infos[i].name.empty()) {
+            field_metas[i].set_name(create_view.attr_infos[i].name);
+          }
+        }
+    }
+
     ASSERT(field_metas.size() == origin_fields.size(), "create view length dis-match");
 
     stmt = new CreateViewStmt(view_name, static_cast<SelectStmt *>(select_stmt), field_metas, origin_fields, can_insert, can_update);

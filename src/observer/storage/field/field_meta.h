@@ -49,6 +49,7 @@ public:
   int len() const;
   bool visible() const;
   bool is_null() const;
+  void set_name(std::string name) { name_=name; }
 public:
   void desc(std::ostream &os) const;
 

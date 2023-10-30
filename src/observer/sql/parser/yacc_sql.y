@@ -507,6 +507,11 @@ attr_def:
     }
 
     }
+    | ID {
+      $$ = new AttrInfoSqlNode;
+      $$->name = $1;
+      free($1);
+    }
     ;
 
 create_as:
