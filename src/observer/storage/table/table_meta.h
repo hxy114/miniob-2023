@@ -35,7 +35,7 @@ public:
   TableMeta(const TableMeta &other);
 
   void swap(TableMeta &other) noexcept;
-
+  void set_name(std::string name);
   RC init(int32_t table_id, const char *name, int field_num, const AttrInfoSqlNode attributes[]);
   RC init(std::string name,std::vector<FieldMeta> fields);
   RC add_index(const IndexMeta &index);

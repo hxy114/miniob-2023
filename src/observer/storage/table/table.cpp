@@ -675,3 +675,17 @@ RC Table::sync()
   LOG_INFO("Sync table over. table=%s", name());
   return rc;
 }
+void Table::copy(Table *table,std::string name){
+  table->base_dir_=base_dir_;
+  table->table_meta_=table_meta_;
+  table->data_buffer_pool_ = data_buffer_pool_;   /// 数据文件关联的buffer pool
+  table->record_handler_ = record_handler_;  /// 记录操作
+  table->indexes_=indexes_;
+
+  table->is_view_=is_view_;
+  table->select_stmt_=select_stmt_;
+  table->origin_fields_=origin_fields_; //原始表的field
+  table->can_insert_=can_insert_; //多表和虚拟字段false
+  table->can_update_=can_update_; //有聚合函数时为false
+  table->table_meta_.set_name(name);
+}

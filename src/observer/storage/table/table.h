@@ -104,7 +104,7 @@ public:
   const TableMeta &table_meta() const;
 
   RC sync();
-
+  void copy(Table *table,std::string  name);
 private:
   RC insert_entry_of_indexes( char *record, const RID &rid);
   RC delete_entry_of_indexes( char *record, const RID &rid, bool error_on_not_exists);

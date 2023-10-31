@@ -161,7 +161,7 @@ void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta
     alias_name = col_alias_map.at(alias_name);
   }
 
-  if (!table_name.empty()) {
+  /*if (!table_name.empty()) {
     // 多表查询
     for (auto it = alias_map.begin(); it != alias_map.end(); it++) {
       if (it->second == table_name) {
@@ -170,7 +170,7 @@ void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta
         break;
       }
     }
-  }
+  }*/
 
   TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), alias_name.c_str());
   //TupleCellSpec *spec = new TupleCellSpec(table->name(), field_meta->name(), field_meta->name());

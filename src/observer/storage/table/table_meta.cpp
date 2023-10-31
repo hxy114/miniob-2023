@@ -42,7 +42,9 @@ void TableMeta::swap(TableMeta &other) noexcept
   indexes_.swap(other.indexes_);
   std::swap(record_size_, other.record_size_);
 }
-
+void TableMeta::set_name(std::string name){
+  name_=name;
+}
 RC TableMeta::init(int32_t table_id, const char *name, int field_num, const AttrInfoSqlNode attributes[])
 {
   if (common::is_blank(name)) {
